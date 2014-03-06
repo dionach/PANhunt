@@ -3,7 +3,7 @@ PANhunt
 
 ##Introduction
 
-PANhunt is a tool that can be used to search drives for credit card numbers (PANs). It's designed to be a simple, standalone tool that can be run from a USB stick.
+PANhunt is a tool that can be used to search drives for credit card numbers (PANs). This is useful for checking PCI DSS scope accuracy. It's designed to be a simple, standalone tool that can be run from a USB stick.
 
 ## Build
 
