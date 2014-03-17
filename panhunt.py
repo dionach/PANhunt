@@ -6,11 +6,13 @@
 # PANhunt: search directories and sub directories for documents with PANs
 # By BB
 
-import os, sys, zipfile, re, datetime, cStringIO, argparse, time, hashlib
+import os, sys, zipfile, re, datetime, cStringIO, argparse, time, hashlib, unicodedata
 import colorama
 import progressbar
+import pst
 
 ########## CLASSES ######################
+
 
 class AFile:
     """ AFile: class for a file that can check itself for PANs"""
@@ -23,7 +25,7 @@ class AFile:
         self.root, self.ext = os.path.splitext(self.filename)
         self.errors = []
         self.pans = []
-        self.type = None # DOC, ZIP, MAIL, DB
+        self.type = None # DOC, ZIP, MAIL, DB, OTHER
 
 
     def __cmp__(self, other):
@@ -69,7 +71,7 @@ class AFile:
         elif self.size < 1024*1024*1024:
             return '%sMB' % (self.size/(1024*1024))
         else:
-            return '%sGB' % (self.size/(1024*1024))
+            return '%sGB' % (self.size/(1024*1024*1024))
 
 
     def set_error(self, error_msg):
@@ -101,6 +103,61 @@ class AFile:
         return self.pans
 
 
+    def check_pst_for_pans(self, pan_regexs, doc_extensions, zip_extensions):
+        """ Searches a pst file for PANs in messages and attachments using regular expressions"""
+
+        all_extensions = doc_extensions + zip_extensions
+
+        pbar_widgets = ['PAN Hunt %s: ' % self.filename, progressbar.Percentage(), ' ', progressbar.Bar(marker = progressbar.RotatingMarker()), ' ', progressbar.ETA(), progressbar.FormatLabel(' PANs:0')]
+        pbar = progressbar.ProgressBar(widgets = pbar_widgets).start()
+
+        try:
+            apst = pst.PST(self.path)
+
+            total_messages = apst.get_total_message_count()
+            total_attachments = apst.get_total_attachment_count()
+            total_items = total_messages + total_attachments
+            items_completed = 0
+
+            for folder in apst.folder_generator():
+                for message in apst.message_generator(folder):
+                    if message.Subject:
+                        message_path = os.path.join(folder.path, message.Subject)
+                    else:
+                        message_path = os.path.join(folder.path, u'[NoSubject]')
+                    if message.Body:
+                        self.check_text_for_pans(message.Body, pan_regexs, message_path)
+                    if message.HasAttachments:
+                        for subattachment in message.subattachments:
+                            attachment_ext = os.path.splitext(subattachment.Filename)[1].lower()
+                            if attachment_ext in doc_extensions:
+                                attachment = message.get_attachment(subattachment)
+                                if attachment.data:
+                                    self.check_text_for_pans(attachment.data, pan_regexs, os.path.join(message_path, subattachment.Filename))
+                            if attachment_ext in zip_extensions:
+                                attachment = message.get_attachment(subattachment)
+                                if attachment.data:
+                                    try:
+                                        memory_zip = cStringIO.StringIO()
+                                        memory_zip.write(attachment.data)
+                                        zf = zipfile.ZipFile(memory_zip)
+                                        self.check_zip_for_pans(zf, pan_regexs, doc_extensions, zip_extensions, os.path.join(message_path, subattachment.Filename))
+                                    except: #RuntimeError: # e.g. zip needs password
+                                        self.set_error(sys.exc_info()[1])
+                            items_completed += 1
+                    items_completed += 1
+                    pbar_widgets[6] = progressbar.FormatLabel(' PANs:%s' % len(self.pans))
+                    pbar.update(items_completed * 100.0 / total_items)
+    
+            apst.close()    
+
+        except IOError:
+            self.set_error(sys.exc_info()[1])
+                            
+        pbar.finish()
+        return self.pans
+
+
     def check_zip_for_pans(self, zf, pan_regexs, doc_extensions, zip_extensions, sub_path):
         """Checks a zip file for valid documents that are then checked for PANs"""
 
@@ -111,15 +168,16 @@ class AFile:
                     memory_zip = cStringIO.StringIO()
                     memory_zip.write(zf.open(file_in_zip).read())
                     nested_zf = zipfile.ZipFile(memory_zip)
-                    self.check_zip_for_pans(nested_zf, pan_regexs, doc_extensions, zip_extensions, os.path.join(sub_path, file_in_zip))
+                    self.check_zip_for_pans(nested_zf, pan_regexs, doc_extensions, zip_extensions, os.path.join(sub_path, file_in_zip.decode('latin-1')))
                 except: #RuntimeError: # e.g. zip needs password
                     self.set_error(sys.exc_info()[1])
             else: #normal doc
                 try:
                     file_text = zf.open(file_in_zip).read()
-                    self.check_text_for_pans(file_text, pan_regexs, os.path.join(sub_path, file_in_zip))   
+                    self.check_text_for_pans(file_text, pan_regexs, os.path.join(sub_path, file_in_zip.decode('latin-1')))   
                 except: # RuntimeError: # e.g. zip needs password
                     self.set_error(sys.exc_info()[1])     
+
 
     def check_text_for_pans(self, text, pan_regexs, sub_path):
         """Uses regular expressions to check for PANs in text"""
@@ -153,6 +211,7 @@ class PAN:
 
         
 ################ UTILITY FUNCTIONS #################
+
 
 def save_object(fn, obj):
 
@@ -190,6 +249,11 @@ def write_csv(fn,dlines):
         s = ','.join(['"%s"' % str(i).replace('"',"'") for i in d])
         f.write('%s\n' % s)
     f.close()
+
+
+def unicode2ascii(unicode_str):
+
+    return unicodedata.normalize('NFKD', unicode_str).encode('ascii','ignore')
 
 
 ################ MODULE FUNCTIONS #################
@@ -230,8 +294,8 @@ def find_all_files_in_directory(root_dir, excluded_directories, doc_extensions, 
                     afile.type = 'ZIP'
                 elif afile.ext.lower() in mail_extensions:
                     afile.type = 'MAIL'
-                elif afile.ext.lower() in database_extensions:
-                    afile.type = 'DB'
+                elif afile.ext.lower() in interesting_extensions:
+                    afile.type = 'OTHER'
                 doc_files.append(afile)
                 if not afile.errors:
                     docs_found += 1    
@@ -247,19 +311,34 @@ def find_all_pans_in_files(doc_files, pan_regexs, doc_extensions, zip_extensions
 
     pbar_widgets = ['PAN Hunt: ', progressbar.Percentage(), ' ', progressbar.Bar(marker = progressbar.RotatingMarker()), ' ', progressbar.ETA(), progressbar.FormatLabel(' PANs:0')]
     pbar = progressbar.ProgressBar(widgets = pbar_widgets).start()
-    total_docs = len([afile for afile in doc_files if not afile.errors])
+    total_docs = len(doc_files)
     docs_completed = 0
     pans_found = 0
 
-    for afile in [afile for afile in doc_files if not afile.errors and afile.type in ('DOC','ZIP')]:
+    for afile in doc_files:
         pans = afile.check_for_pans(pan_regexs, doc_extensions, zip_extensions)
         pans_found += len(pans)
         docs_completed += 1
         pbar_widgets[6] = progressbar.FormatLabel(' PANs:%s' % pans_found)
-        pbar.update( docs_completed * 100.0 / total_docs)
+        pbar.update(docs_completed * 100.0 / total_docs)
     pbar.finish()
 
     return total_docs, pans_found
+
+
+def find_all_pans_in_psts(pst_files, pan_regexs, doc_extensions, zip_extensions):
+    """ Searches psts in pst_files list for PANs in messages and attachments using regular expressions"""
+
+    total_psts = len(pst_files)
+    psts_completed = 0
+    pans_found = 0
+
+    for afile in pst_files:
+        pans = afile.check_pst_for_pans(pan_regexs, doc_extensions, zip_extensions)
+        pans_found += len(pans)
+        psts_completed += 1
+
+    return total_psts, pans_found
 
 
 def get_text_hash(text):
@@ -319,9 +398,8 @@ if __name__ == "__main__":
     excluded_directories = [exc_dir.lower() for exc_dir in excluded_directories_string.split(',')]
     doc_extensions = doc_extensions_string.split(',')
     zip_extensions = zip_extensions_string.split(',')
-    mail_extensions = ['.pst','.ost'] # only checks for existence of Microsoft Outlook pst/ost files
-    database_extensions = ['.accdb','.mdb'] # only checks for existence of Microsoft Access databases
-    interesting_extensions = mail_extensions + database_extensions
+    mail_extensions = ['.pst']
+    interesting_extensions = ['.ost', '.accdb','.mdb'] # checks for existence of files that can't be checked automatically
     # TO DO: how about network drives, other databases?
 
     pan_regexs = {'Mastercard': re.compile('(?:\D|^)(5[1-5][0-9]{2}(?:\ |\-|)[0-9]{4}(?:\ |\-|)[0-9]{4}(?:\ |\-|)[0-9]{4})(?:\D|$)'), \
@@ -329,10 +407,14 @@ if __name__ == "__main__":
                     'AMEX': re.compile('(?:\D|^)((?:34|37)[0-9]{2}(?:\ |\-|)[0-9]{6}(?:\ |\-|)[0-9]{5})(?:\D|$)')}
 
     # find all files to check
-    doc_files = find_all_files_in_directory(search_dir, excluded_directories, doc_extensions, zip_extensions, mail_extensions, database_extensions)
+    doc_files = find_all_files_in_directory(search_dir, excluded_directories, doc_extensions, zip_extensions, mail_extensions, interesting_extensions)
     
     # check each file
-    total_docs, pans_found = find_all_pans_in_files(doc_files, pan_regexs, doc_extensions, zip_extensions)
+    total_docs, doc_pans_found = find_all_pans_in_files([afile for afile in doc_files if not afile.errors and afile.type in ('DOC','ZIP')], pan_regexs, doc_extensions, zip_extensions)
+    # check each pst message and attachment
+    total_psts, pst_pans_found = find_all_pans_in_psts([afile for afile in doc_files if not afile.errors and afile.type == 'MAIL'], pan_regexs, doc_extensions, zip_extensions)
+
+    pans_found = doc_pans_found + pst_pans_found
 
     # report findings
     pan_sep = '\n\t'
@@ -348,11 +430,12 @@ if __name__ == "__main__":
         print colorama.Fore.YELLOW + pan_list
         pan_report += pan_list + '\n\n'
     
-    if len([afile for afile in doc_files if afile.type in ('MAIL','DB')]) <> 0:
+    if len([afile for afile in doc_files if afile.type == 'OTHER']) <> 0:
         pan_report += 'Interesting Files to check separately:\n'
-    for afile in sorted([afile for afile in doc_files if afile.type in ('MAIL','DB')]):
+    for afile in sorted([afile for afile in doc_files if afile.type == 'OTHER']):
         pan_report += '%s (%s %s)\n' % (afile.path, afile.size_friendly(), afile.modified.strftime('%d/%m/%Y'))
 
+    pan_report = unicode2ascii(pan_report)
     pan_report += '\n%s' % (get_text_hash(pan_report))
 
     print colorama.Fore.WHITE + 'Report written to %s' % output_file
