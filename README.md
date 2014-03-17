@@ -27,7 +27,7 @@ pyinstaller.exe panhunt.py -F -i dionach.ico
 ```
 panhunt [-h] [-s SEARCH] [-x EXCLUDE] [-d DOCFILES] [-z ZIPFILES] [-o OUTFILE] [-u]
 
-PANhunt: search directories and sub directories for documents containing PANs.
+PANhunt: search directories and sub directories for documents, ZIPs and PST files that contain PANs.
 
 optional arguments:
   -h, --help   show this help message and exit
@@ -65,4 +65,4 @@ Report written to pans_found.txt
 
 ## Function
 
-The script uses regular expressions to look for Visa, MasterCard or AMEX credit card numbers in document files. Zip files are recursed to look for text files. The script will list but does not yet search PST or Access databases.
+The script uses regular expressions to look for Visa, MasterCard or AMEX credit card numbers in document files. Zip files are recursed to look for document files. PST files are parsed and emails and attachments searched in. The script will list but does not yet search Access databases.
