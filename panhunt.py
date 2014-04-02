@@ -134,7 +134,8 @@ class PANFile(filehunt.AFile):
             pans = regex.findall(text)
             if pans:
                 for pan in pans:
-                    self.pans.append(PAN(self.path, sub_path, brand, pan))
+                    if PAN.is_valid_luhn_checksum(pan):
+                        self.pans.append(PAN(self.path, sub_path, brand, pan))
 
 
 class PAN:
@@ -157,6 +158,25 @@ class PAN:
     def get_masked_pan(self):
         return re.sub('\d','*',self.pan[:-4]) + self.pan[-4:]
 
+
+    @staticmethod
+    def is_valid_luhn_checksum(pan):
+        """ from wikipedia: http://en.wikipedia.org/wiki/Luhn_algorithm"""
+
+        pan = re.sub('[^\d]','', pan)
+
+        def digits_of(n):
+            return [int(d) for d in str(n)]
+
+        digits = digits_of(pan)
+        odd_digits = digits[-1::-2]
+        even_digits = digits[-2::-2]
+        checksum = 0
+        checksum += sum(odd_digits)
+        for d in even_digits:
+            checksum += sum(digits_of(d*2))
+        
+        return checksum % 10 == 0
         
 
 
@@ -208,11 +228,20 @@ def get_text_hash(text):
     return hashlib.sha512(encoded_text+'PAN').hexdigest()
 
 
+def add_hash_to_file(text_file):
+
+    text = filehunt.read_unicode_file(text_file)
+    hash_check = get_text_hash(text)
+
+    text += os.linesep + get_text_hash(text)
+    filehunt.write_unicode_file(text_file, text)
+
+
 def check_file_hash(text_file):
     
-    text_output = read_file(text_file)
-    hash_pos = text_output.rfind('\n')
-    hash_in_file =  text_output[hash_pos+1:]
+    text_output = filehunt.read_unicode_file(text_file)
+    hash_pos = text_output.rfind(os.linesep)
+    hash_in_file =  text_output[hash_pos+len(os.linesep):]
     hash_check = get_text_hash(text_output[:hash_pos])
     if hash_in_file == hash_check:
         print colorama.Fore.GREEN + 'Hashes OK'
@@ -242,13 +271,12 @@ def output_report(search_dir, excluded_directories_string, doc_files, total_docs
         pan_report += u'Interesting Files to check separately:\n'
     for afile in sorted([afile for afile in doc_files if afile.type == 'OTHER']):
         pan_report += u'%s (%s %s)\n' % (afile.path, afile.size_friendly(), afile.modified.strftime('%d/%m/%Y'))
-    pan_report += '\n'
 
     pan_report = pan_report.replace('\n', os.linesep)
-    pan_report += u'%s' % (get_text_hash(pan_report))
 
     print colorama.Fore.WHITE + 'Report written to %s' % filehunt.unicode2ascii(output_file)
     filehunt.write_unicode_file(output_file, pan_report)
+    add_hash_to_file(output_file)
 
 
 

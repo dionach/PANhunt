@@ -153,6 +153,14 @@ def write_file(fn,s):
     f.close()
 
 
+def read_unicode_file(fn):
+
+    f = codecs.open(fn, encoding='utf-8', mode='r')
+    s = f.read()
+    f.close()
+    return s
+
+
 def write_unicode_file(fn,s):
 
     f = codecs.open(fn, encoding='utf-8', mode='w')
