@@ -774,7 +774,10 @@ class PType:
     def get_multi_value_offsets(self, bytes):
 
         ulCount = struct.unpack('I', bytes[:4])[0]
-        rgulDataOffsets = [struct.unpack('Q', bytes[4+i*8:4+(i+1)*8])[0] for i in range(ulCount)]
+        if ulCount == 1:
+            rgulDataOffsets = [8] # not documented, but seems as if a single length multi only has a 4 byte ULONG with the offset. Boo!
+        else:
+            rgulDataOffsets = [struct.unpack('Q', bytes[4+i*8:4+(i+1)*8])[0] for i in range(ulCount)]
         rgulDataOffsets.append(len(bytes))
         return ulCount, rgulDataOffsets
 
