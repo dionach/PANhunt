@@ -873,6 +873,8 @@ class PropIdEnum:
     PidTagAttachExtension = 0x3703
     PidTagAttachLongFilename = 0x3707
 
+
+
 class PC: # Property Context
 
     def __init__(self, hn):
