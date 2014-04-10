@@ -25,21 +25,24 @@ pyinstaller.exe panhunt.py -F -i dionach.ico
 ##Usage
 
 ```
-panhunt [-h] [-s SEARCH] [-x EXCLUDE] [-d DOCFILES] [-z ZIPFILES] [-o OUTFILE] [-u]
+usage: panhunt [-h] [-s SEARCH] [-x EXCLUDE] [-t TEXTFILES] [-z ZIPFILES] [-e SPECIALFILES] [-m MAILFILES] [-l OTHERFILES] [-o OUTFILE] [-u]
 
-PANhunt: search directories and sub directories for documents, ZIPs and PST files that contain PANs.
+PAN Hunt v1.1: search directories and sub directories for documents containing PANs.
 
 optional arguments:
-  -h, --help   show this help message and exit
-  -s SEARCH    base directory to search in (default: C:\)
-  -x EXCLUDE   directories to exclude from the search (default: C:\Windows,C:\Program Files,C:\Program Files (x86))
-  -d DOCFILES  document file extensions to search (default: .doc,.xls,.xml,.txt,.csv)
-  -z ZIPFILES  zip file extensions to search (default: .docx,.xlsx,.zip)
-  -o OUTFILE   output file name for PAN report (default: pans_found.txt)
-  -u           unmask PANs in output (default: False)
+  -h, --help       show this help message and exit
+  -s SEARCH        base directory to search in (default: C:\)
+  -x EXCLUDE       directories to exclude from the search (default: C:\Windows,C:\Program Files,C:\Program Files (x86))
+  -t TEXTFILES     text file extensions to search (default: .doc,.xls,.xml,.txt,.csv)
+  -z ZIPFILES      zip file extensions to search (default: .docx,.xlsx,.zip)
+  -e SPECIALFILES  special file extensions to search (default: .msg)
+  -m MAILFILES     email file extensions to search (default: .pst)
+  -l OTHERFILES    other file extensions to list (default: .ost,.accdb,.mdb)
+  -o OUTFILE       output file name for PAN report (default: panhunt_YYYY-MM-DD-HHMMSS.txt)
+  -u               unmask PANs in output (default: False)
 ```
 
-Simply running it with no arguments will search the C:\ drive for documents containing PANs, and output to pans_found.txt.
+Simply running it with no arguments will search the C:\ drive for documents containing PANs, and output to panhunt_<timestamp>.txt.
 
 ##Example Output
 
@@ -60,9 +63,9 @@ FOUND PANs: D:\lab\test card text file.txt (47B 26/02/2014)
          Visa:************1111
          Visa:****-****-****-1111
 		...
-Report written to pans_found.txt
+Report written to panhunt_YYYY-MM-DD-HHMMSS.txt
 ```
 
 ## Function
 
-The script uses regular expressions to look for Visa, MasterCard or AMEX credit card numbers in document files. Zip files are recursed to look for document files. PST files are parsed and emails and attachments searched in. The script will list but does not yet search Access databases.
+The script uses regular expressions to look for Visa, MasterCard or AMEX credit card numbers in document files. Zip files are recursed to look for document files. PST and MSG files are parsed and emails and attachments searched in. The script will list but does not yet search Access databases.
