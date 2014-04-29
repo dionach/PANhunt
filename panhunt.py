@@ -13,8 +13,32 @@ import filehunt
 
 app_version = '1.1'
 
+# defaults
+search_dir = u'C:\\'
+output_file = u'panhunt_%s.txt' % time.strftime("%Y-%m-%d-%H%M%S")
+excluded_directories_string = u'C:\\Windows,C:\\Program Files,C:\\Program Files (x86)'
+text_extensions_string =  u'.doc,.xls,.xml,.txt,.csv,.log'
+zip_extensions_string = u'.docx,.xlsx,.zip'
+special_extensions_string = u'.msg'
+mail_extensions_string = u'.pst'
+other_extensions_string = u'.ost,.accdb,.mdb' # checks for existence of files that can't be checked automatically
 
-########## CLASSES ######################
+excluded_directories = None
+search_extensions = {}
+
+pan_regexs = {'Mastercard': re.compile('(?:\D|^)(5[1-5][0-9]{2}(?:\ |\-|)[0-9]{4}(?:\ |\-|)[0-9]{4}(?:\ |\-|)[0-9]{4})(?:\D|$)'), \
+                'Visa': re.compile('(?:\D|^)(4[0-9]{3}(?:\ |\-|)[0-9]{4}(?:\ |\-|)[0-9]{4}(?:\ |\-|)[0-9]{4})(?:\D|$)'), \
+                'AMEX': re.compile('(?:\D|^)((?:34|37)[0-9]{2}(?:\ |\-|)[0-9]{6}(?:\ |\-|)[0-9]{5})(?:\D|$)')}
+
+
+###################################################################################################################################
+#   ____ _                         
+#  / ___| | __ _ ___ ___  ___  ___ 
+# | |   | |/ _` / __/ __|/ _ \/ __|
+# | |___| | (_| \__ \__ \  __/\__ \
+#  \____|_|\__,_|___/___/\___||___/
+#                                  
+###################################################################################################################################
 
 
 class PANFile(filehunt.AFile):
@@ -79,7 +103,14 @@ class PAN:
         
 
 
-################ MODULE FUNCTIONS #################
+###################################################################################################################################
+#  __  __           _       _        _____                 _   _                 
+# |  \/  | ___   __| |_   _| | ___  |  ___|   _ _ __   ___| |_(_) ___  _ __  ___ 
+# | |\/| |/ _ \ / _` | | | | |/ _ \ | |_ | | | | '_ \ / __| __| |/ _ \| '_ \/ __|
+# | |  | | (_) | (_| | |_| | |  __/ |  _|| |_| | | | | (__| |_| | (_) | | | \__ \
+# |_|  |_|\___/ \__,_|\__,_|_|\___| |_|   \__,_|_| |_|\___|\__|_|\___/|_| |_|___/
+#
+###################################################################################################################################       
 
 
 def get_text_hash(text):
@@ -113,14 +144,14 @@ def check_file_hash(text_file):
     print colorama.Fore.WHITE + hash_in_file +'\n' + hash_check
 
 
-def output_report(search_dir, excluded_directories_string, all_files, total_docs, pans_found, output_file, mask_pans):
+def output_report(search_dir, excluded_directories_string, all_files, total_files_searched, pans_found, output_file, mask_pans):
 
     pan_sep = u'\n\t'
     pan_report = u'PAN Hunt Report - %s\n%s\n' % (time.strftime("%H:%M:%S %d/%m/%Y"), '='*100)
     pan_report += u'Searched %s\nExcluded %s\n' % (search_dir, excluded_directories_string)
     pan_report += u'Command: %s\n' % (' '.join(sys.argv))
     pan_report += u'Uname: %s\n' % (' | '.join(platform.uname()))
-    pan_report += u'Searched %s files. Found %s possible PANs.\n%s\n\n' % (total_docs, pans_found, '='*100)
+    pan_report += u'Searched %s files. Found %s possible PANs.\n%s\n\n' % (total_files_searched, pans_found, '='*100)
     
     for afile in sorted([afile for afile in all_files if afile.matches]):
         pan_header = u'FOUND PANs: %s (%s %s)' % (afile.path, afile.size_friendly(), afile.modified.strftime('%d/%m/%Y'))
@@ -142,24 +173,50 @@ def output_report(search_dir, excluded_directories_string, all_files, total_docs
     add_hash_to_file(output_file)
 
 
+def set_global_parameters():
 
-################ MAIN #################
+    global excluded_directories_string, text_extensions_string, zip_extensions_string, special_extensions_string, mail_extensions_string, other_extensions_string, excluded_directories, search_extensions
+
+    excluded_directories = [exc_dir.lower() for exc_dir in excluded_directories_string.split(',')]    
+    search_extensions['TEXT'] = text_extensions_string.split(',')
+    search_extensions['ZIP'] = zip_extensions_string.split(',')
+    search_extensions['SPECIAL'] = special_extensions_string.split(',')
+    search_extensions['MAIL'] = mail_extensions_string.split(',')
+    search_extensions['OTHER'] = other_extensions_string.split(',')
+
+
+def hunt_pans(gauge_update_function=None):
+
+    global search_dir, excluded_directories, search_extensions
+
+    # find all files to check
+    all_files = filehunt.find_all_files_in_directory(PANFile, search_dir, excluded_directories, search_extensions, gauge_update_function)
+
+    # check each file
+    total_docs, doc_pans_found = filehunt.find_all_regexs_in_files([afile for afile in all_files if not afile.errors and afile.type in ('TEXT','ZIP','SPECIAL')], pan_regexs, search_extensions, 'PAN', gauge_update_function)
+    # check each pst message and attachment
+    total_psts, pst_pans_found = filehunt.find_all_regexs_in_psts([afile for afile in all_files if not afile.errors and afile.type == 'MAIL'], pan_regexs, search_extensions, 'PAN', gauge_update_function)
+
+    total_files_searched = total_docs + total_psts
+    pans_found = doc_pans_found + pst_pans_found
+
+    return total_files_searched, pans_found, all_files
+
+
+###################################################################################################################################
+#  __  __       _       
+# |  \/  | __ _(_)_ __  
+# | |\/| |/ _` | | '_ \ 
+# | |  | | (_| | | | | |
+# |_|  |_|\__,_|_|_| |_|
+#
+###################################################################################################################################
 
 
 if __name__ == "__main__":
 
     colorama.init()
-
-    # defaults
-    search_dir = u'C:\\'
-    output_file = u'panhunt_%s.txt' % time.strftime("%Y-%m-%d-%H%M%S")
-    excluded_directories_string = u'C:\\Windows,C:\\Program Files,C:\\Program Files (x86)'
-    text_extensions_string =  u'.doc,.xls,.xml,.txt,.csv'
-    zip_extensions_string = u'.docx,.xlsx,.zip'
-    special_extensions_string = u'.msg'
-    mail_extensions_string = u'.pst'
-    other_extensions_string = u'.ost,.accdb,.mdb' # checks for existence of files that can't be checked automatically
-    
+  
     # Command Line Arguments
     arg_parser = argparse.ArgumentParser(prog='panhunt', description='PAN Hunt v%s: search directories and sub directories for documents containing PANs.' % (app_version), formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     arg_parser.add_argument('-s', dest='search', default=search_dir, help='base directory to search in')
@@ -188,30 +245,10 @@ if __name__ == "__main__":
     mail_extensions_string = unicode(args.mailfiles)
     other_extensions_string = unicode(args.otherfiles)
     mask_pans = not args.unmask
+    
+    set_global_parameters()
 
-    excluded_directories = [exc_dir.lower() for exc_dir in excluded_directories_string.split(',')]
-
-    search_extensions = {}
-    search_extensions['TEXT'] = text_extensions_string.split(',')
-    search_extensions['ZIP'] = zip_extensions_string.split(',')
-    search_extensions['SPECIAL'] = special_extensions_string.split(',')
-    search_extensions['MAIL'] = mail_extensions_string.split(',')
-    search_extensions['OTHER'] = other_extensions_string.split(',')
-    # TO DO: how about network drives, other databases?
-
-    pan_regexs = {'Mastercard': re.compile('(?:\D|^)(5[1-5][0-9]{2}(?:\ |\-|)[0-9]{4}(?:\ |\-|)[0-9]{4}(?:\ |\-|)[0-9]{4})(?:\D|$)'), \
-                    'Visa': re.compile('(?:\D|^)(4[0-9]{3}(?:\ |\-|)[0-9]{4}(?:\ |\-|)[0-9]{4}(?:\ |\-|)[0-9]{4})(?:\D|$)'), \
-                    'AMEX': re.compile('(?:\D|^)((?:34|37)[0-9]{2}(?:\ |\-|)[0-9]{6}(?:\ |\-|)[0-9]{5})(?:\D|$)')}
-
-    # find all files to check
-    all_files = filehunt.find_all_files_in_directory(PANFile, search_dir, excluded_directories, search_extensions)
-
-    # check each file
-    total_docs, doc_pans_found = filehunt.find_all_regexs_in_files([afile for afile in all_files if not afile.errors and afile.type in ('TEXT','ZIP','SPECIAL')], pan_regexs, search_extensions, 'PAN')
-    # check each pst message and attachment
-    total_psts, pst_pans_found = filehunt.find_all_regexs_in_psts([afile for afile in all_files if not afile.errors and afile.type == 'MAIL'], pan_regexs, search_extensions, 'PAN')
-
-    pans_found = doc_pans_found + pst_pans_found
+    total_files_searched, pans_found, all_files = hunt_pans()
 
     # report findings
-    output_report(search_dir, excluded_directories_string, all_files, total_docs, pans_found, output_file, mask_pans)
+    output_report(search_dir, excluded_directories_string, all_files, total_files_searched, pans_found, output_file, mask_pans)

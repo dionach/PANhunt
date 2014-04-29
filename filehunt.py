@@ -13,6 +13,16 @@ import pst # MS-PST files
 import msmsg # MS-MSG files
 
 
+###################################################################################################################################
+#   ____ _                         
+#  / ___| | __ _ ___ ___  ___  ___ 
+# | |   | |/ _` / __/ __|/ _ \/ __|
+# | |___| | (_| \__ \__ \  __/\__ \
+#  \____|_|\__,_|___/___/\___||___/
+#                                  
+###################################################################################################################################
+
+
 class AFile:
     """ AFile: class for a file that can search itself"""
 
@@ -106,17 +116,21 @@ class AFile:
                     msg.close()
                 except IOError:
                     self.set_error(sys.exc_info()[1])
-
+                except:
+                    self.set_error(sys.exc_info()[1])
         return self.matches
 
 
-    def check_pst_regexs(self, regexs, search_extensions, hunt_type):
+    def check_pst_regexs(self, regexs, search_extensions, hunt_type, gauge_update_function=None):
         """ Searches a pst file for regular expressions in messages and attachments using regular expressions"""
 
         all_extensions = search_extensions['TEXT'] + search_extensions['ZIP'] + search_extensions['SPECIAL']
 
-        pbar_widgets = ['%s Hunt %s: ' % (hunt_type, unicode2ascii(self.filename)), progressbar.Percentage(), ' ', progressbar.Bar(marker = progressbar.RotatingMarker()), ' ', progressbar.ETA(), progressbar.FormatLabel(' %ss:0' % hunt_type)]
-        pbar = progressbar.ProgressBar(widgets = pbar_widgets).start()
+        if not gauge_update_function:
+            pbar_widgets = ['%s Hunt %s: ' % (hunt_type, unicode2ascii(self.filename)), progressbar.Percentage(), ' ', progressbar.Bar(marker = progressbar.RotatingMarker()), ' ', progressbar.ETA(), progressbar.FormatLabel(' %ss:0' % hunt_type)]
+            pbar = progressbar.ProgressBar(widgets = pbar_widgets).start()
+        else:
+            gauge_update_function(caption = '%s Hunt: ' % hunt_type)
 
         try:
             apst = pst.PST(self.path)
@@ -141,8 +155,11 @@ class AFile:
                                 self.check_attachment_regexs(attachment, regexs, search_extensions, message_path)
                             items_completed += 1
                     items_completed += 1
-                    pbar_widgets[6] = progressbar.FormatLabel(' %ss:%s' % (hunt_type, len(self.matches)))
-                    pbar.update(items_completed * 100.0 / total_items)
+                    if not gauge_update_function:
+                        pbar_widgets[6] = progressbar.FormatLabel(' %ss:%s' % (hunt_type, len(self.matches)))
+                        pbar.update(items_completed * 100.0 / total_items)
+                    else:
+                        gauge_update_function(value = items_completed * 100.0 / total_items)
     
             apst.close()    
 
@@ -151,7 +168,9 @@ class AFile:
         except pst.PSTException:
             self.set_error(sys.exc_info()[1])
 
-        pbar.finish()
+        if not gauge_update_function:
+            pbar.finish()
+
         return self.matches
 
 
@@ -219,10 +238,17 @@ class AFile:
                     self.set_error(sys.exc_info()[1])
 
 
-#################### MODULE FUNCTIONS ##############################
+###################################################################################################################################
+#  __  __           _       _        _____                 _   _                 
+# |  \/  | ___   __| |_   _| | ___  |  ___|   _ _ __   ___| |_(_) ___  _ __  ___ 
+# | |\/| |/ _ \ / _` | | | | |/ _ \ | |_ | | | | '_ \ / __| __| |/ _ \| '_ \/ __|
+# | |  | | (_) | (_| | |_| | |  __/ |  _|| |_| | | | | (__| |_| | (_) | | | \__ \
+# |_|  |_|\___/ \__,_|\__,_|_|\___| |_|   \__,_|_| |_|\___|\__|_|\___/|_| |_|___/
+#
+###################################################################################################################################          
 
 
-def find_all_files_in_directory(AFileClass, root_dir, excluded_directories, search_extensions):
+def find_all_files_in_directory(AFileClass, root_dir, excluded_directories, search_extensions, gauge_update_function=None):
     """Recursively searches a directory for files. search_extensions is a dictionary of extension lists"""
     
     all_extensions = [ext for ext_list in search_extensions.values() for ext in ext_list]
@@ -231,9 +257,12 @@ def find_all_files_in_directory(AFileClass, root_dir, excluded_directories, sear
     for ext_type, ext_list in search_extensions.iteritems():
         for ext in ext_list:
             extension_types[ext] = ext_type
-
-    pbar_widgets = ['Doc Hunt: ', progressbar.Percentage(), ' ', progressbar.Bar(marker = progressbar.RotatingMarker()), ' ', progressbar.ETA(), progressbar.FormatLabel(' Docs:0')]
-    pbar = progressbar.ProgressBar(widgets = pbar_widgets).start()
+    
+    if not gauge_update_function:
+        pbar_widgets = ['Doc Hunt: ', progressbar.Percentage(), ' ', progressbar.Bar(marker = progressbar.RotatingMarker()), ' ', progressbar.ETA(), progressbar.FormatLabel(' Docs:0')]
+        pbar = progressbar.ProgressBar(widgets = pbar_widgets).start()
+    else:
+        gauge_update_function(caption = 'Doc Hunt: ')
 
     doc_files = []
     root_dir_dirs = None
@@ -247,8 +276,11 @@ def find_all_files_in_directory(AFileClass, root_dir, excluded_directories, sear
              root_total_items = len(root_dir_dirs) + len(files)
         if root in root_dir_dirs:
             root_items_completed += 1
-            pbar_widgets[6] = progressbar.FormatLabel(' Docs:%s' % docs_found)
-            pbar.update(root_items_completed * 100.0 / root_total_items)
+            if not gauge_update_function:
+                pbar_widgets[6] = progressbar.FormatLabel(' Docs:%s' % docs_found)
+                pbar.update(root_items_completed * 100.0 / root_total_items)
+            else:
+                gauge_update_function(value = root_items_completed * 100.0 / root_total_items)
         for filename in files:
             if root == root_dir:
                 root_items_completed += 1
@@ -258,20 +290,29 @@ def find_all_files_in_directory(AFileClass, root_dir, excluded_directories, sear
                 afile.type = extension_types[afile.ext.lower()]
                 doc_files.append(afile)
                 if not afile.errors:
-                    docs_found += 1    
-                pbar_widgets[6] = progressbar.FormatLabel(' Docs:%s' % docs_found)
-                pbar.update(root_items_completed * 100.0 / root_total_items)
+                    docs_found += 1
+                if not gauge_update_function:
+                    pbar_widgets[6] = progressbar.FormatLabel(' Docs:%s' % docs_found)
+                    pbar.update(root_items_completed * 100.0 / root_total_items)
+                else:
+                    gauge_update_function(value = root_items_completed * 100.0 / root_total_items)
 
-    pbar.finish()
+    if not gauge_update_function:
+        pbar.finish()
+
     return doc_files
 
 
 
-def find_all_regexs_in_files(text_or_zip_files, regexs, search_extensions, hunt_type):
+def find_all_regexs_in_files(text_or_zip_files, regexs, search_extensions, hunt_type, gauge_update_function=None):
     """ Searches files in doc_files list for regular expressions"""
 
-    pbar_widgets = ['%s Hunt: ' % hunt_type, progressbar.Percentage(), ' ', progressbar.Bar(marker = progressbar.RotatingMarker()), ' ', progressbar.ETA(), progressbar.FormatLabel(' %ss:0' % hunt_type)]
-    pbar = progressbar.ProgressBar(widgets = pbar_widgets).start()
+    if not gauge_update_function:
+        pbar_widgets = ['%s Hunt: ' % hunt_type, progressbar.Percentage(), ' ', progressbar.Bar(marker = progressbar.RotatingMarker()), ' ', progressbar.ETA(), progressbar.FormatLabel(' %ss:0' % hunt_type)]
+        pbar = progressbar.ProgressBar(widgets = pbar_widgets).start()
+    else:
+        gauge_update_function(caption = '%s Hunt: ' % hunt_type)
+
     total_files = len(text_or_zip_files)
     files_completed = 0
     matches_found = 0
@@ -280,14 +321,19 @@ def find_all_regexs_in_files(text_or_zip_files, regexs, search_extensions, hunt_
         matches = afile.check_regexs(regexs, search_extensions)
         matches_found += len(matches)
         files_completed += 1
-        pbar_widgets[6] = progressbar.FormatLabel(' %ss:%s' % (hunt_type, matches_found))
-        pbar.update(files_completed * 100.0 / total_files)
-    pbar.finish()
+        if not gauge_update_function:
+            pbar_widgets[6] = progressbar.FormatLabel(' %ss:%s' % (hunt_type, matches_found))
+            pbar.update(files_completed * 100.0 / total_files)
+        else:
+            gauge_update_function(value = files_completed * 100.0 / total_files)
+
+    if not gauge_update_function:
+        pbar.finish()
 
     return total_files, matches_found
 
 
-def find_all_regexs_in_psts(pst_files, regexs, search_extensions, hunt_type):
+def find_all_regexs_in_psts(pst_files, regexs, search_extensions, hunt_type, gauge_update_function=None):
     """ Searches psts in pst_files list for regular expressions in messages and attachments"""
 
     total_psts = len(pst_files)
@@ -295,14 +341,21 @@ def find_all_regexs_in_psts(pst_files, regexs, search_extensions, hunt_type):
     matches_found = 0
 
     for afile in pst_files:
-        matches = afile.check_pst_regexs(regexs, search_extensions, hunt_type)
+        matches = afile.check_pst_regexs(regexs, search_extensions, hunt_type, gauge_update_function)
         matches_found += len(matches)
         psts_completed += 1
 
     return total_psts, matches_found
 
 
-#################### UTILITY FUNCTIONS ############################
+###################################################################################################################################
+#  _   _ _   _ _ _ _           _____                 _   _                 
+# | | | | |_(_) (_) |_ _   _  |  ___|   _ _ __   ___| |_(_) ___  _ __  ___ 
+# | | | | __| | | | __| | | | | |_ | | | | '_ \ / __| __| |/ _ \| '_ \/ __|
+# | |_| | |_| | | | |_| |_| | |  _|| |_| | | | | (__| |_| | (_) | | | \__ \
+#  \___/ \__|_|_|_|\__|\__, | |_|   \__,_|_| |_|\___|\__|_|\___/|_| |_|___/
+#                      |___/                                               
+###################################################################################################################################
 
 
 def save_object(fn, obj):
