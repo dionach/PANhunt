@@ -12,6 +12,7 @@ import progressbar
 import pst # MS-PST files
 import msmsg # MS-MSG files
 
+TEXT_FILE_SIZE_LIMIT = 1073741824 # 1Gb
 
 ###################################################################################################################################
 #   ____ _                         
@@ -67,14 +68,7 @@ class AFile:
 
     def size_friendly(self):
 
-        if self.size < 1024:
-            return '%sB' % (self.size)
-        elif self.size < 1024*1024:
-            return '%sKB' % (self.size/1024)
-        elif self.size < 1024*1024*1024:
-            return '%sMB' % (self.size/(1024*1024))
-        else:
-            return '%sGB' % (self.size/(1024*1024*1024))
+        return get_friendly_size(self.size)
 
 
     def set_error(self, error_msg):
@@ -95,6 +89,8 @@ class AFile:
                     self.set_error('Invalid ZIP file')
             except IOError:
                 self.set_error(sys.exc_info()[1])
+            except:
+                self.set_error(sys.exc_info()[1])
 
         elif self.type == 'TEXT':
             try:
@@ -103,6 +99,8 @@ class AFile:
             except WindowsError:
                 self.set_error(sys.exc_info()[1])
             except IOError:
+                self.set_error(sys.exc_info()[1])
+            except:
                 self.set_error(sys.exc_info()[1])
 
         elif self.type == 'SPECIAL':
@@ -118,6 +116,7 @@ class AFile:
                     self.set_error(sys.exc_info()[1])
                 except:
                     self.set_error(sys.exc_info()[1])
+
         return self.matches
 
 
@@ -251,6 +250,8 @@ class AFile:
 def find_all_files_in_directory(AFileClass, root_dir, excluded_directories, search_extensions, gauge_update_function=None):
     """Recursively searches a directory for files. search_extensions is a dictionary of extension lists"""
     
+    global TEXT_FILE_SIZE_LIMIT
+
     all_extensions = [ext for ext_list in search_extensions.values() for ext in ext_list]
 
     extension_types = {}
@@ -288,6 +289,9 @@ def find_all_files_in_directory(AFileClass, root_dir, excluded_directories, sear
             if afile.ext.lower() in all_extensions:
                 afile.set_file_stats()
                 afile.type = extension_types[afile.ext.lower()]
+                if afile.type in ('TEXT','SPECIAL') and afile.size > TEXT_FILE_SIZE_LIMIT:
+                    afile.type = 'OTHER'
+                    afile.set_error('File size {1} over limit of {0} for checking'.format(get_friendly_size(TEXT_FILE_SIZE_LIMIT), afile.size_friendly()))
                 doc_files.append(afile)
                 if not afile.errors:
                     docs_found += 1
@@ -428,3 +432,14 @@ def get_ext(file_name):
 
     return os.path.splitext(file_name)[1].lower()
 
+
+def get_friendly_size(size):
+
+        if size < 1024:
+            return '{0}B'.format(size)
+        elif size < 1024*1024:
+            return '{0}KB'.format(size/1024)
+        elif size < 1024*1024*1024:
+            return '{0}MB'.format(size/(1024*1024))
+        else:
+            return '{0:.1f}GB'.format(size*1.0/(1024.0*1024*1024))
