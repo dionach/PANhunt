@@ -79,7 +79,7 @@ class PAN:
 
 
     def get_masked_pan(self):
-        return re.sub('\d','*',self.pan[:-4]) + self.pan[-4:]
+        return re.sub('\d','*',self.pan[:0]) + self.pan[16:]
 
 
     @staticmethod
