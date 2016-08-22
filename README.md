@@ -19,8 +19,11 @@ panhunt.py requires:
 To create panhunt.exe as a standalone executable with an icon run:
 
 ```
-pyinstaller.exe panhunt.py -F -i dionach.ico
+pyinstaller.exe panhunt.py -F
 ```	
+
+You will find the Windows panhunt.exe (built on Windows using pyinstaller) and the Linux panhunt binary here (built on CentOS 6 using pyinstaller).
+
 
 ##Usage
 

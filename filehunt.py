@@ -50,7 +50,7 @@ class AFile:
             self.accessed = self.dtm_from_ts(stat.st_atime)
             self.modified = self.dtm_from_ts(stat.st_mtime)
             self.created = self.dtm_from_ts(stat.st_ctime)
-        except WindowsError:
+        except: # WindowsError:
             self.size = -1
             self.set_error(sys.exc_info()[1])            
             
@@ -96,8 +96,8 @@ class AFile:
             try:
                 file_text = read_file(self.path, 'rb')
                 self.check_text_regexs(file_text, regexs, '')
-            except WindowsError:
-                self.set_error(sys.exc_info()[1])
+            #except WindowsError:
+            #    self.set_error(sys.exc_info()[1])
             except IOError:
                 self.set_error(sys.exc_info()[1])
             except:
@@ -133,32 +133,33 @@ class AFile:
 
         try:
             apst = pst.PST(self.path)
+            if apst.header.validPST:
 
-            total_messages = apst.get_total_message_count()
-            total_attachments = apst.get_total_attachment_count()
-            total_items = total_messages + total_attachments
-            items_completed = 0
+                total_messages = apst.get_total_message_count()
+                total_attachments = apst.get_total_attachment_count()
+                total_items = total_messages + total_attachments
+                items_completed = 0
 
-            for folder in apst.folder_generator():
-                for message in apst.message_generator(folder):
-                    if message.Subject:
-                        message_path = os.path.join(folder.path, message.Subject)
-                    else:
-                        message_path = os.path.join(folder.path, u'[NoSubject]')
-                    if message.Body:
-                        self.check_text_regexs(message.Body, regexs, message_path)
-                    if message.HasAttachments:
-                        for subattachment in message.subattachments:
-                            if get_ext(subattachment.Filename) in search_extensions['TEXT']+search_extensions['ZIP']:
-                                attachment = message.get_attachment(subattachment)
-                                self.check_attachment_regexs(attachment, regexs, search_extensions, message_path)
-                            items_completed += 1
-                    items_completed += 1
-                    if not gauge_update_function:
-                        pbar_widgets[6] = progressbar.FormatLabel(' %ss:%s' % (hunt_type, len(self.matches)))
-                        pbar.update(items_completed * 100.0 / total_items)
-                    else:
-                        gauge_update_function(value = items_completed * 100.0 / total_items)
+                for folder in apst.folder_generator():
+                    for message in apst.message_generator(folder):
+                        if message.Subject:
+                            message_path = os.path.join(folder.path, message.Subject)
+                        else:
+                            message_path = os.path.join(folder.path, u'[NoSubject]')
+                        if message.Body:
+                            self.check_text_regexs(message.Body, regexs, message_path)
+                        if message.HasAttachments:
+                            for subattachment in message.subattachments:
+                                if get_ext(subattachment.Filename) in search_extensions['TEXT']+search_extensions['ZIP']:
+                                    attachment = message.get_attachment(subattachment)
+                                    self.check_attachment_regexs(attachment, regexs, search_extensions, message_path)
+                                items_completed += 1
+                        items_completed += 1
+                        if not gauge_update_function:
+                            pbar_widgets[6] = progressbar.FormatLabel(' %ss:%s' % (hunt_type, len(self.matches)))
+                            pbar.update(items_completed * 100.0 / total_items)
+                        else:
+                            gauge_update_function(value = items_completed * 100.0 / total_items)
     
             apst.close()    
 
