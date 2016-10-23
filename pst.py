@@ -580,6 +580,7 @@ class BTH:
                 bth_working_stack = bth_record_list
                 while bth_working_stack:
                     bth_intermediate = bth_working_stack.pop()
+                    bytes = hn.get_hid_data(bth_intermediate.hidNextLevel)
                     bth_record_list = self.get_bth_records(bytes, bth_intermediate.bIdxLevel - 1)
                     if bth_intermediate.bIdxLevel - 1 == 0: # leafs
                         self.bth_datas.extend(bth_record_list)
