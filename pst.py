@@ -769,7 +769,7 @@ class PType:
         elif self.ptype == PTypeEnum.PtypNull:
             return None
         elif self.ptype == PTypeEnum.PtypObject:
-            return bytes
+            return bytes[:4]
         else:
             raise PSTException('Invalid PTypeEnum for value %s ' % self.ptype)
 
@@ -1123,7 +1123,7 @@ class LTP:
             PTypeEnum.PtypMultipleBinary:PType(PTypeEnum.PtypMultipleBinary, 2, False, True), 
             PTypeEnum.PtypUnspecified:PType(PTypeEnum.PtypUnspecified, 0, False, False), 
             PTypeEnum.PtypNull:PType(PTypeEnum.PtypNull, 0, False, False), 
-            PTypeEnum.PtypObject:PType(PTypeEnum.PtypObject, 0, False, False)
+            PTypeEnum.PtypObject:PType(PTypeEnum.PtypObject, 4, False, True)
         }
 
 
@@ -1321,12 +1321,20 @@ class Message:
     afStorage = 0x06
 
 
-    def __init__(self, nid, ltp):
+    def __init__(self, nid, ltp, nbd=None, parent_message=None):
 
-        if nid.nidType != NID.NID_TYPE_NORMAL_MESSAGE:
-            raise PSTException('Invalid Message NID Type: %s' % nid_pc.nidType)
         self.ltp = ltp
-        self.pc = ltp.get_pc_by_nid(nid)
+
+        if parent_message:
+            subnode = parent_message.pc.hn.subnodes[nid]
+            datas = nbd.fetch_all_block_data(subnode.bidData)
+            hn = HN(subnode, ltp, datas)
+            self.pc = PC(hn)
+        else:
+            if nid.nidType != NID.NID_TYPE_NORMAL_MESSAGE:
+                raise PSTException('Invalid Message NID Type: %s' % nid_pc.nidType)
+            self.pc = ltp.get_pc_by_nid(nid)
+        
         self.MessageClass = self.pc.getval(PropIdEnum.PidTagMessageClassW)
         self.Subject = ltp.strip_SubjectPrefix(self.pc.getval(PropIdEnum.PidTagSubjectW))
         self.ClientSubmitTime = self.pc.getval(PropIdEnum.PidTagClientSubmitTime)
