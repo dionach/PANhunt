@@ -1469,6 +1469,14 @@ class Messaging:
             if nameid.N == 1:
                 name_len = struct.unpack('I', nameid_stringstream[nameid.dwPropertyID:nameid.dwPropertyID+4])[0]
                 nameid.name = nameid_stringstream[nameid.dwPropertyID+4:nameid.dwPropertyID+4+name_len].decode('utf-16-le') # unicode
+            if nameid.wGuid == 0:
+                nameid.guid = None
+            elif nameid.wGuid == 1: # PS_MAPI
+               nameid.guid = '(\x03\x02\x00\x00\x00\x00\x00\xc0\x00\x00\x00\x00\x00\x00F'
+            elif nameid.wGuid == 2: # PS_PUBLIC_STRINGS
+                nameid.guid = ')\x03\x02\x00\x00\x00\x00\x00\xc0\x00\x00\x00\x00\x00\x00F'
+            else:
+                nameid.guid = nameid_guidstream[16*(nameid.wGuid-3):16*(nameid.wGuid-2)]
 
 
     def get_folder(self, entryid, parent_path=''):
