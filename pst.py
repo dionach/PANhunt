@@ -381,9 +381,9 @@ class NBD:
         
     def fetch_block(self, bid):
 
-        if bid.bid in self.bbt_entries.keys():
+        try:
             bbt_entry = self.bbt_entries[bid.bid]
-        else:
+        except KeyError:
             raise PSTException('Invalid BBTEntry: %s' % bid)
         offset = bbt_entry.BREF.ib
         data_size = bbt_entry.cb
