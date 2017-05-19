@@ -273,20 +273,13 @@ class Block:
         239, 53, 156, 132, 43, 21, 213, 119, 52, 73, 182, 18, 10, 127, 113, 136, 253, 157, 24, 65, 125, 147, 216, 88, 44, 206, 254, 36, 175, 222, 184, 54, 
         200, 161, 128, 166, 153, 152, 168, 47, 14, 129, 101, 115, 228, 194, 162, 138, 212, 225, 17, 208, 8, 139, 42, 242, 237, 154, 100, 63, 193, 108, 249, 236)
 
+    decrypt_table = string.maketrans(b''.join(map(chr, range(256))), b''.join(map(chr, mpbbCryptFrom512)))
+
     btypeData = 0
     btypeXBLOCK = 1
     btypeXXBLOCK = 2
     btypeSLBLOCK = 3
     btypeSIBLOCK = 4
-
-    def decode_permute(self, pv, cb):
-        """ NDB_CRYPT_PERMUTE: pv is byte array, cb is data length to decode"""
-
-        temp = 0
-        for pvIndex in range(cb):
-            pv[pvIndex] = Block.mpbbCryptFrom512[pv[pvIndex]] # Block.mpbbCrypt[pv[pvIndex] + 512]
-        return str(pv)
-
 
     def __init__(self, bytes, offset, data_size, is_ansi, bid_check, bCryptMethod):
 
@@ -299,7 +292,7 @@ class Block:
             slentry_size = 12
             sientry_size = 8
             sl_si_entries_offset = 4 # [MS-PST] WRONG for SLBLOCK and SIBLOCK for ANSI: there is no 4 byte padding
-        else: # unicode 16       
+        else: # unicode 16
             self.cb, self.wSig, self.dwCRC, self.bid = struct.unpack('HHI8s',bytes[-16:])
             bid_size = 8
             slentry_size = 24
@@ -318,7 +311,7 @@ class Block:
             self.btype = 0
             self.cLevel = 0
             if bCryptMethod == 1: #NDB_CRYPT_PERMUTE
-                self.data = self.decode_permute(bytearray(bytes[:data_size]), data_size)
+                self.data = bytes[:data_size].translate(Block.decrypt_table)
             else: # no data encoding
                 self.data = bytes[:data_size] # data block
 
