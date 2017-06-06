@@ -42,6 +42,8 @@ optional arguments:
   -m MAILFILES     email file extensions to search (default: .pst)
   -l OTHERFILES    other file extensions to list (default: .ost,.accdb,.mdb)
   -o OUTFILE       output file name for PAN report (default: panhunt_YYYY-MM-DD-HHMMSS.txt)
+  -C CONFIG        configuration file to use
+  -X EXCLUDEPAN    the PAN to exclude from search
   -u               unmask PANs in output (default: False)
 ```
 
@@ -72,3 +74,8 @@ Report written to panhunt_YYYY-MM-DD-HHMMSS.txt
 ## Function
 
 The script uses regular expressions to look for Visa, MasterCard or AMEX credit card numbers in document files. Zip files are recursed to look for document files. PST and MSG files are parsed and emails and attachments searched in. The script will list but does not yet search Access databases.
+
+## Configuration
+
+The script allows for a configuration to be written that will default the application with settings such that you don't need to 
+repeatedly specify exclude/include paths or the test PANs to exclude.
