@@ -273,7 +273,10 @@ class Block:
         239, 53, 156, 132, 43, 21, 213, 119, 52, 73, 182, 18, 10, 127, 113, 136, 253, 157, 24, 65, 125, 147, 216, 88, 44, 206, 254, 36, 175, 222, 184, 54, 
         200, 161, 128, 166, 153, 152, 168, 47, 14, 129, 101, 115, 228, 194, 162, 138, 212, 225, 17, 208, 8, 139, 42, 242, 237, 154, 100, 63, 193, 108, 249, 236)
 
-    decrypt_table = string.maketrans(b''.join(map(chr, range(256))), b''.join(map(chr, mpbbCryptFrom512)))
+    if sys.hexversion >= 0x03000000:
+        decrypt_table = bytes.maketrans(bytearray(range(256)), bytearray(mpbbCryptFrom512))
+    else:
+        decrypt_table = string.maketrans(b''.join(map(chr, range(256))), b''.join(map(chr, mpbbCryptFrom512)))
 
     btypeData = 0
     btypeXBLOCK = 1
@@ -1220,7 +1223,7 @@ class Folder:
         self.DisplayName = self.pc.getval(PropIdEnum.PidTagDisplayName)
         self.path = parent_path+'\\'+self.DisplayName
             
-        #print 'FOLDER DEBUG', self.DisplayName, self.pc
+        #print('FOLDER DEBUG', self.DisplayName, self.pc)
 
         self.ContentCount = self.pc.getval(PropIdEnum.PidTagContentCount)
         self.ContainerClass = self.pc.getval(PropIdEnum.PidTagContainerClass)
@@ -2129,9 +2132,9 @@ def log_error(e):
 def test_status_pst(pst_filepath):
 
     pst = PST(pst_filepath)
-    print unicode2ascii(pst.get_pst_status())
-    print 'Total Messages: %s' % pst.get_total_message_count()
-    print 'Total Attachments: %s' % pst.get_total_attachment_count()
+    print(unicode2ascii(pst.get_pst_status()))
+    print('Total Messages: %s' % pst.get_total_message_count())
+    print('Total Attachments: %s' % pst.get_total_attachment_count())
     pst.close()
 
 
@@ -2146,7 +2149,7 @@ def test_dump_pst(pst_filepath, output_path):
     """ dump out all PST email attachments and emails (into text files) to output_path folder"""
 
     pst = PST(pst_filepath)
-    print pst.get_pst_status()
+    print(pst.get_pst_status())
 
     pbar = get_simple_progressbar('Messages: ')
     total_messages = pst.get_total_message_count()
@@ -2172,7 +2175,7 @@ def test_folder_psts(psts_folder):
             error_log_list = []
             pst = PST(pst_filepath)
             status = unicode2ascii(pst.get_pst_status())
-            print status
+            print(status)
             password = ''
             if pst.messaging.PasswordCRC32Hash:
                 password = pst.crack_password(pst.messaging.PasswordCRC32Hash)
@@ -2217,11 +2220,11 @@ if __name__=="__main__":
         output_folder = args.output_folder
 
         if not os.path.exists(input_pst_file):
-            print 'Input PST file does not exist'
+            print('Input PST file does not exist')
             sys.exit(1)
 
         if not os.path.exists(output_folder):
-            print 'Output folder does not exist'
+            print('Output folder does not exist')
             sys.exit(1)
 
         test_dump_pst(input_pst_file,output_folder)
