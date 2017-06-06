@@ -73,7 +73,7 @@ class PANFile(filehunt.AFile):
             pans = regex.findall(text)
             if pans:
                 for pan in pans:
-                    if PAN.is_valid_luhn_checksum(pan) and not pan.is_excluded():
+                    if PAN.is_valid_luhn_checksum(pan) and not PAN.is_excluded(pan):
                         self.matches.append(PAN(self.path, sub_path, brand, pan))
 
 
@@ -98,11 +98,12 @@ class PAN:
         return re.sub('\d','*',self.pan[:-4]) + self.pan[-4:]
 
 
-    def is_excluded(self):
+    @staticmethod
+    def is_excluded(pan):
         global excluded_pans
         
-        for excluded_pan in exluded_pans:
-            if self.pan == excluded_pan:
+        for excluded_pan in excluded_pans:
+            if pan == excluded_pan:
                 return True
         return False
         
