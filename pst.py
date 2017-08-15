@@ -17,6 +17,17 @@ class PSTException(Exception):
 
 error_log_list = []
 
+if sys.hexversion >= 0x03000000:
+    def to_byte(x):
+        return x
+
+    def is_int(x):
+        return isinstance(x, int)
+else:
+    to_byte = ord
+
+    def is_int(x):
+        return isinstance(x, (int, long))
 
 ##############################################################################################################################
 #  _   _           _        ____        _        _                       ___   _ ____  ______    _                          
@@ -68,7 +79,7 @@ class NID:
 
     def __init__(self, bytes_or_nid):
 
-        if isinstance(bytes_or_nid, (int,long)):
+        if is_int(bytes_or_nid):
             self.nid = bytes_or_nid
         else:
             self.nid = struct.unpack('I', bytes_or_nid)[0]
@@ -159,7 +170,7 @@ class Page:
                     entry_type = BBTENTRY
                 else: # ptypeNBT
                     entry_type = NBTENTRY
-                    entry_size = entry_size + entry_size/3
+                    entry_size = entry_size + entry_size//3
             else: # BTENTRY
                 entry_type = BTENTRY
 
@@ -586,13 +597,13 @@ class BTH:
         bth_record_list = []
         if bIdxLevel == 0: # leaf
             record_size = self.cbKey + self.cbEnt
-            records = len(bytes) / record_size
+            records = len(bytes) // record_size
             for i in range(records):
                 key, data = struct.unpack('%ss%ss' % (self.cbKey, self.cbEnt) , bytes[i*record_size:(i+1)*record_size])
                 bth_record_list.append(BTHData(key, data))
         else: # intermediate
             record_size = self.cbKey + 4
-            records = len(bytes) / record_size
+            records = len(bytes) // record_size
             for i in range(records):
                 key, hidNextLevel = struct.unpack('%ss4s' % self.cbKey , bytes[i*record_size:(i+1)*record_size])
                 hidNextLevel = HID(hidNextLevel)
@@ -625,7 +636,7 @@ class PCBTHData:
                 else:
                     raise PSTException('Invalid NID subnode reference %s' % self.subnode_nid)
                 datas = hn.ltp.nbd.fetch_all_block_data(subnode_nid_bid)
-                self.value = ptype.value(''.join(datas))        
+                self.value = ptype.value(b''.join(datas))
 
     def __repr__(self):
 
@@ -714,24 +725,24 @@ class PType:
             #count = struct.unpack('H', bytes[:2])[0]
             return bytes
         elif self.ptype == PTypeEnum.PtypMultipleInteger16:
-            count = len(bytes) / 2
+            count = len(bytes) // 2
             return [struct.unpack('h', bytes[i*2:(i+1)*2])[0] for i in range(count)]
         elif self.ptype == PTypeEnum.PtypMultipleInteger32:
-            count = len(bytes) / 4
+            count = len(bytes) // 4
             return [struct.unpack('i', bytes[i*4:(i+1)*4])[0] for i in range(count)]
         elif self.ptype == PTypeEnum.PtypMultipleFloating32:
-            count = len(bytes) / 4
+            count = len(bytes) // 4
             return [struct.unpack('f', bytes[i*4:(i+1)*4])[0] for i in range(count)]
         elif self.ptype == PTypeEnum.PtypMultipleFloating64:
-            ccount = len(bytes) / 8
+            ccount = len(bytes) // 8
             return [struct.unpack('d', bytes[i*8:(i+1)*8])[0] for i in range(count)]
         elif self.ptype == PTypeEnum.PtypMultipleCurrency:
             raise PSTException('PtypMultipleCurrency value not implemented')
         elif self.ptype == PTypeEnum.PtypMultipleFloatingTime:
-            count = len(bytes) / 8
+            count = len(bytes) // 8
             return [self.get_floating_time(bytes[i*8:(i+1)*8]) for i in range(count)]
         elif self.ptype == PTypeEnum.PtypMultipleInteger64:
-            count = len(bytes) / 8
+            count = len(bytes) // 8
             return [struct.unpack('q', bytes[i*8:(i+1)*8])[0] for i in range(count)]
         elif self.ptype == PTypeEnum.PtypMultipleString:
             ulCount, rgulDataOffsets = self.get_multi_value_offsets(bytes)
@@ -746,10 +757,10 @@ class PType:
                 datas.append(bytes[rgulDataOffsets[i]:rgulDataOffsets[i+1]])
             return datas
         elif self.ptype == PTypeEnum.PtypMultipleTime:
-            count = len(bytes) / 8
+            count = len(bytes) // 8
             return [self.get_time(bytes[i*8:(i+1)*8]) for i in range(count)]
         elif self.ptype == PTypeEnum.PtypMultipleGuid:
-            count = len(bytes) / 16
+            count = len(bytes) // 16
             return [bytes[i*16:(i+1)*16] for i in range(count)]
         elif self.ptype == PTypeEnum.PtypMultipleBinary:
             ulCount, rgulDataOffsets = self.get_multi_value_offsets(bytes)
@@ -1003,7 +1014,7 @@ class TC: # Table Context
                 row_matrix_datas = self.hn.ltp.nbd.fetch_all_block_data(subnode_nid_bid)
 
             for irow in range(len(self.RowIndex)):
-                BlockIndex = irow / RowsPerBlock
+                BlockIndex = irow // RowsPerBlock
                 RowIndex = irow % RowsPerBlock
                 row_bytes = row_matrix_datas[BlockIndex][RowIndex * row_size:(RowIndex+1) * row_size]
                 dwRowID = struct.unpack('I', row_bytes[:4])[0]
@@ -1011,7 +1022,7 @@ class TC: # Table Context
                 #row_datas = []
                 rowvals = {}
                 for tcoldesc in self.rgTCOLDESC:
-                    is_fCEB = ((struct.unpack('B',rgbCEB[tcoldesc.iBit / 8])[0] & (1 << (7 - (tcoldesc.iBit % 8)))) != 0)
+                    is_fCEB = ((to_byte(rgbCEB[tcoldesc.iBit // 8]) & (1 << (7 - (tcoldesc.iBit % 8)))) != 0)
                     if is_fCEB:
                         data_bytes = row_bytes[tcoldesc.ibData:tcoldesc.ibData+tcoldesc.cbData]
                     else:
@@ -1047,7 +1058,7 @@ class TC: # Table Context
                     else:
                         raise PSTException('Row Matrix Value HNID Subnode invalid: %s' % subnode_nid)
                     datas = self.hn.ltp.nbd.fetch_all_block_data(subnode_nid_bid)
-                    return ptype.value(''.join(datas))        
+                    return ptype.value(b''.join(datas))
 
 
     def get_row_ID(self, RowIndex):
@@ -1460,7 +1471,7 @@ class Messaging:
         self.pc_name_to_id_map = self.ltp.get_pc_by_nid(NID(NID.NID_NAME_TO_ID_MAP))
 
         nameid_entrystream = self.pc_name_to_id_map.getval(PropIdEnum.PidTagNameidStreamEntry)
-        self.nameid_entries = [NAMEID(nameid_entrystream[i*8:(i+1)*8]) for i in range(len(nameid_entrystream)/8)]
+        self.nameid_entries = [NAMEID(nameid_entrystream[i*8:(i+1)*8]) for i in range(len(nameid_entrystream)//8)]
         nameid_stringstream = self.pc_name_to_id_map.getval(PropIdEnum.PidTagNameidStreamString)
         nameid_guidstream = self.pc_name_to_id_map.getval(PropIdEnum.PidTagNameidStreamGuid)
         for nameid in self.nameid_entries:
@@ -1470,9 +1481,9 @@ class Messaging:
             if nameid.wGuid == 0:
                 nameid.guid = None
             elif nameid.wGuid == 1: # PS_MAPI
-               nameid.guid = '(\x03\x02\x00\x00\x00\x00\x00\xc0\x00\x00\x00\x00\x00\x00F'
+               nameid.guid = b'(\x03\x02\x00\x00\x00\x00\x00\xc0\x00\x00\x00\x00\x00\x00F'
             elif nameid.wGuid == 2: # PS_PUBLIC_STRINGS
-                nameid.guid = ')\x03\x02\x00\x00\x00\x00\x00\xc0\x00\x00\x00\x00\x00\x00F'
+                nameid.guid = b')\x03\x02\x00\x00\x00\x00\x00\xc0\x00\x00\x00\x00\x00\x00F'
             else:
                 nameid.guid = nameid_guidstream[16*(nameid.wGuid-3):16*(nameid.wGuid-2)]
 
@@ -1772,11 +1783,11 @@ class CRC:
         if cbLength < 4:
             cbRunningLength = 0
         else:
-            cbRunningLength = (cbLength/8)*8
+            cbRunningLength = (cbLength//8)*8
         cbEndUnalignedBytes = cbLength - cbRunningLength
 
         index = 0
-        for i in range(1, (cbRunningLength/8) + 1):
+        for i in range(1, (cbRunningLength//8) + 1):
             dwCRC ^= struct.unpack('I',pv[index:index+4])[0]
             dwCRC = CRC.CrcTableOffset88[dwCRC & 0x000000FF] ^ CRC.CrcTableOffset80[(dwCRC >> 8) & 0x000000FF] ^ CRC.CrcTableOffset72[(dwCRC >> 16) & 0x000000FF] ^ CRC.CrcTableOffset64[(dwCRC >> 24) & 0x000000FF]
             index += 4
@@ -1818,7 +1829,7 @@ class Header:
         self.dwReserved1 = fd.read(FieldSize.DWORD) # ignore
         self.dwReserved2 = fd.read(FieldSize.DWORD) # ignore
 
-        self.validPST = (self.dwMagic == '!BDN' and self.wMagicClient == 'SM')
+        self.validPST = (self.dwMagic == b'!BDN' and self.wMagicClient == b'SM')
         if not self.validPST:
             return
         self.is_ansi = (self.wVer in (14, 15))
@@ -2064,11 +2075,11 @@ def size_friendly(size):
     if size < 1024:
         return '%sB' % (size)
     elif size < 1024*1024:
-        return '%sKB' % (size/1024)
+        return '%sKB' % (size//1024)
     elif size < 1024*1024*1024:
-        return '%sMB' % (size/(1024*1024))
+        return '%sMB' % (size//(1024*1024))
     else:
-        return '%sGB' % (size/(1024*1024*1024))
+        return '%sGB' % (size//(1024*1024*1024))
 
 
 def unicode2ascii(unicode_str):
