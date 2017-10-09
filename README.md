@@ -1,7 +1,7 @@
 PANhunt
 ========
 
-##Introduction
+## Introduction
 
 PANhunt is a tool that can be used to search drives for credit card numbers (PANs). This is useful for checking PCI DSS scope accuracy. It's designed to be a simple, standalone tool that can be run from a USB stick.
 
@@ -20,7 +20,7 @@ To create panhunt.exe as a standalone executable with an icon run:
 
 ```
 pyinstaller.exe panhunt.py -F
-```	
+```
 
 You will find the Windows panhunt.exe (built on Windows using pyinstaller) and the Linux panhunt binary here (built on CentOS 6 using pyinstaller).
 
@@ -49,7 +49,7 @@ optional arguments:
 
 Simply running it with no arguments will search the C:\ drive for documents containing PANs, and output to panhunt_<timestamp>.txt.
 
-##Example Output
+## Example Output
 
 ```
 Doc Hunt: 100% ||||||||||||||||||||||||||||||||||||||||| Time: 0:00:01 Docs:299
@@ -77,5 +77,5 @@ The script uses regular expressions to look for Visa, MasterCard or AMEX credit 
 
 ## Configuration
 
-The script allows for a configuration to be written that will default the application with settings such that you don't need to 
+The script allows for a configuration to be written that will default the application with settings such that you don't need to
 repeatedly specify exclude/include paths or the test PANs to exclude.
