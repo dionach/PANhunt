@@ -1298,9 +1298,9 @@ class SubAttachment:
 
 class SubRecipient:
 
-    def __init__(self, RecipientType, DisplayName, ObjectType, AddressType, EmailAddress, DisplayType):
+    def __init__(self, RecipientType, DisplayName, ObjectType, AddressType, EmailAddress, DisplayType, EntryID):
 
-        self.RecipientType, self.DisplayName, self.ObjectType, self.AddressType, self.EmailAddress, self.DisplayType = RecipientType, DisplayName, ObjectType, AddressType, EmailAddress, DisplayType
+        self.RecipientType, self.DisplayName, self.ObjectType, self.AddressType, self.EmailAddress, self.DisplayType, self.EntryID = RecipientType, DisplayName, ObjectType, AddressType, EmailAddress, DisplayType, EntryID
 
 
     def __repr__(self):
@@ -1374,7 +1374,8 @@ class Message:
         if self.tc_recipients:
             self.subrecipients = [SubRecipient(self.tc_recipients.getval(RowIndex,PropIdEnum.PidTagRecipientType), self.tc_recipients.getval(RowIndex,PropIdEnum.PidTagDisplayName), \
                     self.tc_recipients.getval(RowIndex,PropIdEnum.PidTagObjectType), self.tc_recipients.getval(RowIndex,PropIdEnum.PidTagAddressType), \
-                    self.tc_recipients.getval(RowIndex,PropIdEnum.PidTagEmailAddress), self.tc_recipients.getval(RowIndex,PropIdEnum.PidTagDisplayType)) for RowIndex in range(len(self.tc_recipients.RowIndex))]
+                    self.tc_recipients.getval(RowIndex,PropIdEnum.PidTagEmailAddress), self.tc_recipients.getval(RowIndex,PropIdEnum.PidTagDisplayType), \
+                    self.tc_recipients.getval(RowIndex,PropIdEnum.PidTagEntryID)) for RowIndex in range(len(self.tc_recipients.RowIndex))]
         
 
     def get_attachment(self, subattachment):
