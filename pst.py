@@ -1272,7 +1272,7 @@ class Folder:
 
     def __repr__(self):
 
-        return 'Folder: %s, %s items, messages: %s, subfolders: %s' % (self.DisplayName, len(self.submessages), self.subfolders)
+        return 'Folder: %s, submessages: %s, subfolders: %s' % (self.DisplayName, len(self.submessages), self.subfolders)
 
 
 
