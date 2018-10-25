@@ -6,7 +6,7 @@
 # based on MS-PST Microsoft specification for PST file format [MS-PST].pdf v2.1
 # 
 
-import struct, binascii, datetime, math, os, sys, unicodedata, re, argparse, itertools, string
+import struct, datetime, math, os, sys, unicodedata, re, argparse, itertools, string
 import colorama
 import progressbar
 
