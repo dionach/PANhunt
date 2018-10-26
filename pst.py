@@ -2061,19 +2061,6 @@ def hex(i):
     return '0x%x' % i
 
 
-def bin_bytes(bytes):
-
-    return ''.join([bin(ord(c)).lstrip('0b').zfill(8) for c in bytes])
-
-
-def bit_shift_bytes_left(bytes, offset):
-
-    new_bytes = ''
-    for c in bytes:        
-        new_bytes += chr( ord(c) << offset)
-    return new_bytes
-
-
 def size_friendly(size):
 
     if size < 1024:
