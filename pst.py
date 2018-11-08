@@ -1225,15 +1225,19 @@ class SubMessage:
 
 class Folder:
 
-    def __init__(self, nid, ltp, parent_path=''):
+    def __init__(self, nid, ltp, parent_path='', messaging=None):
 
         if nid.nidType != NID.NID_TYPE_NORMAL_FOLDER:
             raise PSTException('Invalid Folder NID Type: %s' % nid.nidType)
         self.pc = ltp.get_pc_by_nid(nid)
         self.DisplayName = self.pc.getval(PropIdEnum.PidTagDisplayName)
         self.path = parent_path+'\\'+self.DisplayName
-            
+
         #print('FOLDER DEBUG', self.DisplayName, self.pc)
+
+        # entryids in PST are stored as nids
+        if messaging:
+            self.EntryId = 4*b'\x00' + messaging.store_record_key + struct.pack('I', nid.nid)
 
         self.ContentCount = self.pc.getval(PropIdEnum.PidTagContentCount)
         self.ContainerClass = self.pc.getval(PropIdEnum.PidTagContainerClass)
@@ -1249,7 +1253,7 @@ class Folder:
             self.tc_hierachy = ltp.get_tc_by_nid(nid_hierachy)
             self.subfolders = [SubFolder(self.tc_hierachy.RowIndex[RowIndex].nid, self.tc_hierachy.getval(RowIndex,PropIdEnum.PidTagDisplayName), self.path) for RowIndex in range(len(self.tc_hierachy.RowIndex))]
         except PSTException as e:
-            log_error(e)               
+            log_error(e)
 
         try:
             self.tc_contents = None
@@ -1260,7 +1264,7 @@ class Folder:
                     self.tc_contents.getval(RowIndex,PropIdEnum.PidTagClientSubmitTime)) \
                     for RowIndex in range(len(self.tc_contents.RowIndex)) if RowIndex in self.tc_contents.RowIndex.keys()]
         except PSTException as e:
-            log_error(e)                          
+            log_error(e)
 
         try:
             self.tc_fai = None
@@ -1318,13 +1322,13 @@ class Message:
     mfNotifyRead = 0x100
     mfNotifyUnread = 0x200
     mfInternet = 0x2000
-    
+
     afByValue = 0x01
     afEmbeddedMessage = 0x05
     afStorage = 0x06
 
 
-    def __init__(self, nid, ltp, nbd=None, parent_message=None):
+    def __init__(self, nid, ltp, nbd=None, parent_message=None, messaging=None):
 
         self.ltp = ltp
 
@@ -1337,7 +1341,11 @@ class Message:
             if nid.nidType != NID.NID_TYPE_NORMAL_MESSAGE:
                 raise PSTException('Invalid Message NID Type: %s' % nid_pc.nidType)
             self.pc = ltp.get_pc_by_nid(nid)
-        
+
+        # entryids in PST are stored as nids
+        if messaging:
+            self.EntryId = 4*b'\x00' + messaging.store_record_key + struct.pack('I', nid.nid)
+
         self.MessageClass = self.pc.getval(PropIdEnum.PidTagMessageClassW)
         self.Subject = ltp.strip_SubjectPrefix(self.pc.getval(PropIdEnum.PidTagSubjectW))
         self.ClientSubmitTime = self.pc.getval(PropIdEnum.PidTagClientSubmitTime)
@@ -1454,11 +1462,12 @@ class Messaging:
             self.set_name_to_id_map()
         except PSTException as e:
             log_error(e)
-            
+
 
     def set_message_store(self):
 
-        self.message_store = self.ltp.get_pc_by_nid(NID(NID.NID_MESSAGE_STORE))        
+        self.message_store = self.ltp.get_pc_by_nid(NID(NID.NID_MESSAGE_STORE))
+        self.store_record_key = self.message_store.getval(PropIdEnum.PidTagRecordKey)
 
         if PropIdEnum.PidTagPstPassword in self.message_store.props.keys():
             self.PasswordCRC32Hash = struct.unpack('I', struct.pack('i', self.message_store.getval(PropIdEnum.PidTagPstPassword)))[0]
@@ -1493,7 +1502,7 @@ class Messaging:
 
     def get_folder(self, entryid, parent_path=''):
 
-        return Folder(entryid.nid, self.ltp, parent_path)
+        return Folder(entryid.nid, self.ltp, parent_path, self)
 
 
     def get_named_properties(self):
@@ -1929,7 +1938,7 @@ class PST:
         while subfolder_stack:
             subfolder = subfolder_stack.pop()
             try:
-                folder = Folder(subfolder.nid, self.ltp, subfolder.parent_path)
+                folder = Folder(subfolder.nid, self.ltp, subfolder.parent_path, self.messaging)
                 subfolder_stack.extend(folder.subfolders)
                 yield folder
             except PSTException as e:
@@ -1941,7 +1950,7 @@ class PST:
         try:
             for submessage in folder.submessages:
                 try:
-                    message = Message(submessage.nid, self.ltp)
+                    message = Message(submessage.nid, self.ltp, messaging=self.messaging)
                     yield message
                 except PSTException as e:
                     log_error(e)                 
