@@ -7,7 +7,6 @@
 # 
 
 import struct, datetime, math, os, sys, unicodedata, re, argparse, itertools, string
-import colorama
 import progressbar
 
 
