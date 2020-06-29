@@ -1250,15 +1250,15 @@ class Folder:
         self.ContainerClass = self.pc.getval(PropIdEnum.PidTagContainerClass)
         self.HasSubfolders = self.pc.getval(PropIdEnum.PidTagSubfolders)
 
-        nid_hierachy = NID(nid.nidIndex | NID.NID_TYPE_HIERARCHY_TABLE)
+        nid_hierarchy = NID(nid.nidIndex | NID.NID_TYPE_HIERARCHY_TABLE)
         nid_contents = NID(nid.nidIndex | NID.NID_TYPE_CONTENTS_TABLE)
         nid_fai = NID(nid.nidIndex | NID.NID_TYPE_ASSOC_CONTENTS_TABLE) # FAI = Folder Associated Information
 
         try:
-            self.tc_hierachy = None
+            self.tc_hierarchy = None
             self.subfolders = []
-            self.tc_hierachy = ltp.get_tc_by_nid(nid_hierachy)
-            self.subfolders = [SubFolder(self.tc_hierachy.RowIndex[RowIndex].nid, self.tc_hierachy.getval(RowIndex,PropIdEnum.PidTagDisplayName), self.path) for RowIndex in range(len(self.tc_hierachy.RowIndex))]
+            self.tc_hierarchy = ltp.get_tc_by_nid(nid_hierarchy)
+            self.subfolders = [SubFolder(self.tc_hierarchy.RowIndex[RowIndex].nid, self.tc_hierarchy.getval(RowIndex,PropIdEnum.PidTagDisplayName), self.path) for RowIndex in range(len(self.tc_hierarchy.RowIndex))]
         except PSTException as e:
             log_error(e)
 
