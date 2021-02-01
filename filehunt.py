@@ -6,7 +6,7 @@
 # filehunt: general file searching library for use by PANhunt and PassHunt
 # By BB
 
-import os, sys, zipfile, re, datetime, cStringIO, argparse, time, hashlib, unicodedata, codecs
+import os, sys, zipfile, re, datetime, io, argparse, time, hashlib, unicodedata, codecs
 import colorama
 import progressbar
 import pst # MS-PST files
@@ -37,10 +37,8 @@ class AFile:
         self.type = None
         self.matches = []
 
-    def __cmp__(self, other):
-    
-        return cmp(self.path.lower(), other.path.lower())
-
+    def __lt__(self, other):
+        return self.path.lower() < other.path.lower()
 
     def set_file_stats(self):
 
@@ -74,7 +72,7 @@ class AFile:
     def set_error(self, error_msg):
 
         self.errors.append(error_msg)
-        print colorama.Fore.RED + unicode2ascii(u'ERROR %s on %s' % (error_msg, self.path)) + colorama.Fore.WHITE
+        sys.stdout.buffer.write(colorama.Fore.RED.encode('ascii','ignore') + unicode2ascii('ERROR %s on %s\n' % (error_msg, self.path)) + colorama.Fore.WHITE.encode('ascii','ignore'))
 
 
     def check_regexs(self, regexs, search_extensions):
@@ -94,7 +92,7 @@ class AFile:
 
         elif self.type == 'TEXT':
             try:
-                file_text = read_file(self.path, 'rb')
+                file_text = read_file(self.path, 'r')
                 self.check_text_regexs(file_text, regexs, '')
             #except WindowsError:
             #    self.set_error(sys.exc_info()[1])
@@ -145,7 +143,7 @@ class AFile:
                         if message.Subject:
                             message_path = os.path.join(folder.path, message.Subject)
                         else:
-                            message_path = os.path.join(folder.path, u'[NoSubject]')
+                            message_path = os.path.join(folder.path, '[NoSubject]')
                         if message.Body:
                             self.check_text_regexs(message.Body, regexs, message_path)
                         if message.HasAttachments:
@@ -185,7 +183,7 @@ class AFile:
         if attachment_ext in search_extensions['ZIP']:
             if attachment.data:
                 try:
-                    memory_zip = cStringIO.StringIO()
+                    memory_zip = io.StringIO()
                     memory_zip.write(attachment.data)
                     zf = zipfile.ZipFile(memory_zip)
                     self.check_zip_regexs(zf, regexs, search_extensions, os.path.join(sub_path, attachment.Filename))
@@ -212,7 +210,7 @@ class AFile:
         for file_in_zip in files_in_zip:
             if get_ext(file_in_zip) in search_extensions['ZIP']: # nested zip file
                 try:
-                    memory_zip = cStringIO.StringIO()
+                    memory_zip = io.StringIO()
                     memory_zip.write(zf.open(file_in_zip).read())
                     nested_zf = zipfile.ZipFile(memory_zip)                    
                     self.check_zip_regexs(nested_zf, regexs, search_extensions, os.path.join(sub_path, decode_zip_filename(file_in_zip)))
@@ -222,13 +220,13 @@ class AFile:
             elif get_ext(file_in_zip) in search_extensions['TEXT']: #normal doc
                 try:
                     file_text = zf.open(file_in_zip).read()
-                    self.check_text_regexs(file_text, regexs, os.path.join(sub_path, decode_zip_filename(file_in_zip)))
+                    self.check_text_regexs(decode_zip_text(file_text), regexs, os.path.join(sub_path, decode_zip_filename(file_in_zip)))
                 except: # RuntimeError: # e.g. zip needs password
                     self.set_error(sys.exc_info()[1])     
             else: # SPECIAL
                 try:
                     if get_ext(file_in_zip) == '.msg':
-                        memory_msg = cStringIO.StringIO()
+                        memory_msg = io.StringIO()
                         memory_msg.write(zf.open(file_in_zip).read())
                         msg = msmsg.MSMSG(memory_msg)
                         if msg.validMSG:
@@ -253,10 +251,10 @@ def find_all_files_in_directory(AFileClass, root_dir, excluded_directories, sear
     
     global TEXT_FILE_SIZE_LIMIT
 
-    all_extensions = [ext for ext_list in search_extensions.values() for ext in ext_list]
+    all_extensions = [ext for ext_list in list(search_extensions.values()) for ext in ext_list]
 
     extension_types = {}
-    for ext_type, ext_list in search_extensions.iteritems():
+    for ext_type, ext_list in search_extensions.items():
         for ext in ext_list:
             extension_types[ext] = ext_type
     
@@ -379,9 +377,13 @@ def load_object(fn):
 
 
 def read_file(fn, open_mode="r"):
-    f = open(fn, open_mode)
+    try:
+        with open(fn, open_mode) as f:
     s = f.read()
-    f.close()
+    except:
+        with open(fn, "rb") as f:
+            b = f.read()
+            s = b.decode("utf-8", "ignore")
     return s
 
 
@@ -421,13 +423,19 @@ def unicode2ascii(unicode_str):
     return unicodedata.normalize('NFKD', unicode_str).encode('ascii','ignore')
 
 
-def decode_zip_filename(str):
+def decode_zip_filename(instr):
 
-    if type(str) is unicode:
-        return str
+    if type(instr) is str:
+        return instr
     else:
-        return str.decode('cp437')
+        return instr.decode('cp437')
 
+def decode_zip_text(instr):
+
+    if type(instr) is str:
+        return instr
+    else:
+        return instr.decode('utf-8')
 
 def get_ext(file_name):
 

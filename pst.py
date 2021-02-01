@@ -26,7 +26,7 @@ else:
     to_byte = ord
 
     def is_int(x):
-        return isinstance(x, (int, long))
+        return isinstance(x, int)
 
 ##############################################################################################################################
 #  _   _           _        ____        _        _                       ___   _ ____  ______    _                          
@@ -284,9 +284,9 @@ class Block:
         200, 161, 128, 166, 153, 152, 168, 47, 14, 129, 101, 115, 228, 194, 162, 138, 212, 225, 17, 208, 8, 139, 42, 242, 237, 154, 100, 63, 193, 108, 249, 236)
 
     if sys.hexversion >= 0x03000000:
-        decrypt_table = bytes.maketrans(bytearray(range(256)), bytearray(mpbbCryptFrom512))
+        decrypt_table = bytes.maketrans(bytearray(list(range(256))), bytearray(mpbbCryptFrom512))
     else:
-        decrypt_table = string.maketrans(b''.join(map(chr, range(256))), b''.join(map(chr, mpbbCryptFrom512)))
+        decrypt_table = string.maketrans(b''.join(map(chr, list(range(256)))), b''.join(map(chr, mpbbCryptFrom512)))
 
     btypeData = 0
     btypeXBLOCK = 1
@@ -439,7 +439,7 @@ class NBD:
         block = self.fetch_block(bid)
         if block.block_type == Block.btypeSLBLOCK:
             for slentry in block.rgentries:
-                if slentry.nid in subnodes.keys():
+                if slentry.nid in list(subnodes.keys()):
                     raise PSTException('Duplicate subnode %s' % slentry.nid)
                 subnodes[slentry.nid.nid] = slentry
         elif block.block_type == Block.btypeSIBLOCK:
@@ -457,7 +457,7 @@ class NBD:
         page = self.fetch_page(page_offset)
         for entry in page.rgEntries:
             if isinstance(entry, entry_type):
-                if entry.key in leaf_entries.keys():
+                if entry.key in list(leaf_entries.keys()):
                     raise PSTException('Invalid Leaf Key %s' % entry)
                 leaf_entries[entry.key] = entry
             elif isinstance(entry, BTENTRY):
@@ -633,7 +633,7 @@ class PCBTHData:
                 self.value = ptype.value(hn.get_hid_data(self.hid))
             else:
                 self.subnode_nid = NID(self.dwValueHnid)
-                if self.subnode_nid.nid in hn.subnodes.keys():
+                if self.subnode_nid.nid in list(hn.subnodes.keys()):
                     subnode_nid_bid = hn.subnodes[self.subnode_nid.nid].bidData
                 else:
                     raise PSTException('Invalid NID subnode reference %s' % self.subnode_nid)
@@ -920,7 +920,7 @@ class PC: # Property Context
 
     def getval(self, propid):
         
-        if propid in self.props.keys():
+        if propid in list(self.props.keys()):
             return self.props[propid].value 
         else:
             return None
@@ -1016,7 +1016,7 @@ class TC: # Table Context
             if self.hnidRows.is_hid:
                 row_matrix_datas = [self.hn.get_hid_data(self.hnidRows)] # block data list
             else:
-                if self.hnidRows.nid in self.hn.subnodes.keys():
+                if self.hnidRows.nid in list(self.hn.subnodes.keys()):
                     subnode_nid_bid = self.hn.subnodes[self.hnidRows.nid].bidData
                 else:
                     raise PSTException('Row Matrix HNID not in Subnodes: %s' % self.hnidRows.nid)
@@ -1037,7 +1037,7 @@ class TC: # Table Context
                     else:
                         data_bytes = None
                     #row_datas.append(self.get_row_cell_value(data_bytes, tcoldesc))
-                    if tcoldesc.wPropId in rowvals.keys():
+                    if tcoldesc.wPropId in list(rowvals.keys()):
                         raise PSTException('Property ID %s already in row data' % hex(tcoldesc.wPropId))
                     rowvals[tcoldesc.wPropId] = self.get_row_cell_value(data_bytes, tcoldesc)
                 self.RowMatrix[dwRowID] = rowvals #row_datas
@@ -1062,7 +1062,7 @@ class TC: # Table Context
                     return ptype.value(self.hn.get_hid_data(hid))
                 else:
                     subnode_nid = NID(data_bytes)
-                    if subnode_nid.nid in self.hn.subnodes.keys():
+                    if subnode_nid.nid in list(self.hn.subnodes.keys()):
                         subnode_nid_bid = self.hn.subnodes[subnode_nid.nid].bidData
                     else:
                         raise PSTException('Row Matrix Value HNID Subnode invalid: %s' % subnode_nid)
@@ -1079,7 +1079,7 @@ class TC: # Table Context
 
         dwRowID = self.get_row_ID(RowIndex)
         rowvals = self.RowMatrix[dwRowID]
-        if wPropId in rowvals.keys():
+        if wPropId in list(rowvals.keys()):
             return rowvals[wPropId]
         else:
             return None
@@ -1089,7 +1089,7 @@ class TC: # Table Context
 
         s = 'TC Rows: %s, %s\n' % (len(self.RowIndex), self.hn)
         s += 'Columns: ' + ''.join([' %s' % tcoldesc for tcoldesc in self.rgTCOLDESC])
-        s += '\nData:\n' + '\n'.join(['%s: %s' % (hex(dwRowID), rowvals) for dwRowID,rowvals in self.RowMatrix.items()])
+        s += '\nData:\n' + '\n'.join(['%s: %s' % (hex(dwRowID), rowvals) for dwRowID,rowvals in list(self.RowMatrix.items())])
         return s
 
 
@@ -1269,7 +1269,7 @@ class Folder:
             self.submessages = [SubMessage(self.tc_contents.RowIndex[RowIndex].nid, \
                     self.tc_contents.getval(RowIndex,PropIdEnum.PidTagSentRepresentingNameW), ltp.strip_SubjectPrefix(self.tc_contents.getval(RowIndex,PropIdEnum.PidTagSubjectW)), \
                     self.tc_contents.getval(RowIndex,PropIdEnum.PidTagClientSubmitTime)) \
-                    for RowIndex in range(len(self.tc_contents.RowIndex)) if RowIndex in self.tc_contents.RowIndex.keys()]
+                    for RowIndex in range(len(self.tc_contents.RowIndex)) if RowIndex in list(self.tc_contents.RowIndex.keys())]
         except PSTException as e:
             log_error(e)
 
@@ -1373,7 +1373,7 @@ class Message:
         self.tc_attachments = None
         self.tc_recipients = None
         if self.pc.hn.subnodes:
-            for subnode in self.pc.hn.subnodes.values(): #SLENTRYs
+            for subnode in list(self.pc.hn.subnodes.values()): #SLENTRYs
                 if subnode.nid.nidType == NID.NID_TYPE_ATTACHMENT_TABLE:
                     self.tc_attachments = self.ltp.get_tc_by_slentry(subnode)
                 elif subnode.nid.nidType == NID.NID_TYPE_RECIPIENT_TABLE:
@@ -1476,7 +1476,7 @@ class Messaging:
         self.message_store = self.ltp.get_pc_by_nid(NID(NID.NID_MESSAGE_STORE))
         self.store_record_key = self.message_store.getval(PropIdEnum.PidTagRecordKey)
 
-        if PropIdEnum.PidTagPstPassword in self.message_store.props.keys():
+        if PropIdEnum.PidTagPstPassword in list(self.message_store.props.keys()):
             self.PasswordCRC32Hash = struct.unpack('I', struct.pack('i', self.message_store.getval(PropIdEnum.PidTagPstPassword)))[0]
         else:
             self.PasswordCRC32Hash = None
@@ -1994,15 +1994,15 @@ class PST:
         messages_completed = 0
         for folder in self.folder_generator():
             filepath = get_unused_filename(os.path.join(path, get_safe_filename(folder.path.replace('\\','_'))+'.txt'))
-            msg_txt = u''
+            msg_txt = ''
             for message in self.message_generator(folder):
-                msg_txt += u'Subject: %s\nFrom: %s (%s)\n' % (message.Subject, message.SenderName, message.SenderSmtpAddress)
-                msg_txt += u'To: %s\n' % ('; '.join([u'%s (%s)' % (subrecipient.DisplayName, subrecipient.EmailAddress) for subrecipient in message.subrecipients]))
-                msg_txt += u'Sent: %s\nDelivered: %s\n' % (message.ClientSubmitTime, message.MessageDeliveryTime)
-                msg_txt += u'MessageClass: %s\n' % (message.MessageClass)
+                msg_txt += 'Subject: %s\nFrom: %s (%s)\n' % (message.Subject, message.SenderName, message.SenderSmtpAddress)
+                msg_txt += 'To: %s\n' % ('; '.join(['%s (%s)' % (subrecipient.DisplayName, subrecipient.EmailAddress) for subrecipient in message.subrecipients]))
+                msg_txt += 'Sent: %s\nDelivered: %s\n' % (message.ClientSubmitTime, message.MessageDeliveryTime)
+                msg_txt += 'MessageClass: %s\n' % (message.MessageClass)
                 if message.HasAttachments:
-                    msg_txt += u'Attachments: %s\n' % (u', '.join([subattachment.__repr__() for subattachment in message.subattachments]))
-                msg_txt += u'\n%s\n\n\n' % message.Body
+                    msg_txt += 'Attachments: %s\n' % (', '.join([subattachment.__repr__() for subattachment in message.subattachments]))
+                msg_txt += '\n%s\n\n\n' % message.Body
             if msg_txt:
                 write_file(filepath, unicode2ascii(msg_txt), 'w')
                 messages_completed += 1
@@ -2030,7 +2030,7 @@ class PST:
 
     def get_pst_status(self):
 
-        status = u'Valid PST: %s, Unicode: %s, CryptMethod: %s, Name: %s, Password: %s' % (self.header.validPST, self.header.is_unicode, self.header.bCryptMethod, self.messaging.message_store.getval(PropIdEnum.PidTagDisplayName), self.messaging.PasswordCRC32Hash)
+        status = 'Valid PST: %s, Unicode: %s, CryptMethod: %s, Name: %s, Password: %s' % (self.header.validPST, self.header.is_unicode, self.header.bCryptMethod, self.messaging.message_store.getval(PropIdEnum.PidTagDisplayName), self.messaging.PasswordCRC32Hash)
         return status
 
     
@@ -2146,9 +2146,9 @@ def log_error(e):
 def test_status_pst(pst_filepath):
 
     pst = PST(pst_filepath)
-    print(unicode2ascii(pst.get_pst_status()))
-    print('Total Messages: %s' % pst.get_total_message_count())
-    print('Total Attachments: %s' % pst.get_total_attachment_count())
+    sys.stdout.buffer.write((unicode2ascii(pst.get_pst_status())) + '\n'.encode('ascii','ignore'))
+    print(('Total Messages: %s' % pst.get_total_message_count()))
+    print(('Total Attachments: %s' % pst.get_total_attachment_count()))
     pst.close()
 
 
@@ -2163,7 +2163,7 @@ def test_dump_pst(pst_filepath, output_path):
     """ dump out all PST email attachments and emails (into text files) to output_path folder"""
 
     pst = PST(pst_filepath)
-    print(pst.get_pst_status())
+    print((pst.get_pst_status()))
 
     pbar = get_simple_progressbar('Messages: ')
     total_messages = pst.get_total_message_count()
