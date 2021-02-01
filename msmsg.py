@@ -61,7 +61,7 @@ class FAT:
 
     def __repr__(self):
 
-        return ', '.join(['%s:%s' % (hex(sector), hex(entry)) for sector, entry in zip(range(len(self.entries)), self.entries)])
+        return ', '.join(['%s:%s' % (hex(sector), hex(entry)) for sector, entry in zip(list(range(len(self.entries))), self.entries)])
 
 
 
@@ -102,7 +102,7 @@ class MiniFAT:
 
     def __repr__(self):
 
-        return ', '.join(['%s:%s' % (hex(sector), hex(entry)) for sector, entry in zip(range(len(self.entries)), self.entries)])
+        return ', '.join(['%s:%s' % (hex(sector), hex(entry)) for sector, entry in zip(list(range(len(self.entries))), self.entries)])
 
 
 
@@ -133,7 +133,7 @@ class Directory:
             child_ids_queue.append(dir_entry.ChildID)
             while child_ids_queue:
                 child_entry =  self.entries[child_ids_queue.pop()]
-                if child_entry.Name in dir_entry.childs.keys():
+                if child_entry.Name in list(dir_entry.childs.keys()):
                     raise MSGException('Directory Entry Name already in children dictionary')
                 dir_entry.childs[child_entry.Name] = child_entry
                 if child_entry.SiblingID != DirectoryEntry.NOSTREAM:
@@ -156,7 +156,7 @@ class Directory:
 
     def __repr__(self):
 
-        return u', '.join([entry.__repr__() for entry in self.entries]) 
+        return ', '.join([entry.__repr__() for entry in self.entries])
 
 
 
@@ -199,9 +199,8 @@ class DirectoryEntry:
         self.childs = {}
     
                     
-    def __cmp__(self, other):
-    
-        return cmp(self.Name, other.Name)
+    def __lt__(self, other):
+        return self.Name < other.Name
 
 
     def get_data(self):
@@ -222,7 +221,7 @@ class DirectoryEntry:
         for child_entry in sorted(self.childs.values()):
             line_sfx = ''
             if child_entry.ObjectType == DirectoryEntry.OBJECT_STORAGE:
-                line_sfx = '(%s)' % len(child_entry.childs.keys())
+                line_sfx = '(%s)' % len(list(child_entry.childs.keys()))
             s += '%s %s %s\n' % (line_pfx, child_entry.Name, line_sfx)
             if expand:
                 s += child_entry.list_children(level+1, expand)
@@ -231,7 +230,7 @@ class DirectoryEntry:
 
     def __repr__(self):
 
-        return u'%s (%s, %s, %s, %s, %s, %s)' % (self.Name, self.ObjectType, hex(self.SiblingID), hex(self.RightSiblingID), hex(self.ChildID), hex(self.StartingSectorLocation), hex(self.StreamSize))
+        return '%s (%s, %s, %s, %s, %s, %s)' % (self.Name, self.ObjectType, hex(self.SiblingID), hex(self.RightSiblingID), hex(self.ChildID), hex(self.StartingSectorLocation), hex(self.StreamSize))
 
 
 
@@ -240,7 +239,7 @@ class MSCFB:
     def __init__(self, cfb_file):
         """cfb_file is unicode or string filename or a file object"""
 
-        if isinstance(cfb_file, str) or isinstance(cfb_file, unicode):
+        if isinstance(cfb_file, str) or isinstance(cfb_file, str):
             self.fd = open(cfb_file,'rb')
         else:
             self.fd = cfb_file
@@ -330,14 +329,14 @@ class PropertyStream:
             property_entries_count = (len(bytes) - header_size) / 16        
             for i in range(property_entries_count):
                 prop_entry = PropertyEntry(self.msmsg, parent_dir_entry, bytes[header_size + i*16: header_size + i*16 + 16])
-                if prop_entry in self.properties.keys():
+                if prop_entry in list(self.properties.keys()):
                     raise MSGException('PropertyID already in properties dictionary')
                 self.properties[prop_entry.PropertyID] = prop_entry
 
 
     def getval(self, prop_id):
 
-        if prop_id in self.properties.keys():
+        if prop_id in list(self.properties.keys()):
             return self.properties[prop_id].value
         else:
             return None
@@ -345,7 +344,7 @@ class PropertyStream:
 
     def __repr__(self):
 
-        return u'\n'.join([prop.__repr__() for prop in self.properties.values()])
+        return '\n'.join([prop.__repr__() for prop in list(self.properties.values())])
 
 
 
@@ -389,7 +388,7 @@ class PropertyEntry:
 
     def __repr__(self):
 
-        return u'%s=%s' % (hex(self.PropertyTag), self.value.__repr__())
+        return '%s=%s' % (hex(self.PropertyTag), self.value.__repr__())
 
 
 
@@ -723,7 +722,7 @@ class MSMSG:
         recipient_dir_index = 0
         while True:
             recipient_dir_name = '__recip_version1.0_#%s' % zeropadhex(recipient_dir_index, 8)
-            if recipient_dir_name in self.root_dir_entry.childs.keys():
+            if recipient_dir_name in list(self.root_dir_entry.childs.keys()):
                 recipient_dir_entry = self.root_dir_entry.childs[recipient_dir_name]
                 rps = PropertyStream(self, recipient_dir_entry, PropertyStream.RECIP_OR_ATTACH_HEADER_SIZE)
                 recipient = Recipient(rps)
@@ -739,7 +738,7 @@ class MSMSG:
         attachment_dir_index = 0
         while True:
             attachment_dir_name = '__attach_version1.0_#%s' % zeropadhex(attachment_dir_index, 8)
-            if attachment_dir_name in self.root_dir_entry.childs.keys():
+            if attachment_dir_name in list(self.root_dir_entry.childs.keys()):
                 attachment_dir_entry = self.root_dir_entry.childs[attachment_dir_name]
                 aps = PropertyStream(self, attachment_dir_entry, PropertyStream.RECIP_OR_ATTACH_HEADER_SIZE)
                 attachment = Attachment(aps)
@@ -870,7 +869,7 @@ def size_friendly(size):
 def test_status_msg(msg_file):
 
     msg = MSMSG(msg_file)
-    print msg.cfb.directory
+    print(msg.cfb.directory)
     msg.close()
 
 
@@ -878,19 +877,19 @@ def test_folder_msgs(test_folder):
 
     global error_log_list
 
-    s = u''
+    s = ''
     for msg_filepath in [os.path.join(test_folder, filename) for filename in os.listdir(test_folder) if os.path.isfile(os.path.join(test_folder, filename)) and os.path.splitext(filename.lower())[1] == '.msg']:
         #try:
-            s += u'Opening %s\n' % msg_filepath
+            s += 'Opening %s\n' % msg_filepath
             error_log_list = []
             msg = MSMSG(msg_filepath)
             #s += u'MajorVersion: %s, FATSectors: %s, MiniFATSectors: %s,  DIFATSectors %s\n' % (msg.cfb.MajorVersion, msg.cfb.FATSectors, msg.cfb.MiniFATSectors, msg.cfb.DIFATSectors)
             #s += u'MiniStreamSectorLocation: %s, MiniStreamSize: %s\n' % (hex(msg.cfb.MiniStreamSectorLocation), msg.cfb.MiniStreamSize)
             #s += u'\n' + msg.cfb.directory.entries[0].list_children(level=0, expand=True)
             #s += u'\n' + msg.prop_stream.__repr__()
-            s += u'Recipients: %s\n' % u', '.join([recip.__repr__() for recip in msg.recipients])
-            s += u'Attachments: %s\n' % u', '.join([attach.__repr__() for attach in msg.attachments])
-            s += u'Subject: %s\nBody: %s\n' % (msg.Subject.__repr__(), msg.Body.__repr__())            
+            s += 'Recipients: %s\n' % ', '.join([recip.__repr__() for recip in msg.recipients])
+            s += 'Attachments: %s\n' % ', '.join([attach.__repr__() for attach in msg.attachments])
+            s += 'Subject: %s\nBody: %s\n' % (msg.Subject.__repr__(), msg.Body.__repr__())
             s += '\n\n\n'
             # dump attachments:
             if False: 
@@ -917,6 +916,6 @@ def test_folder_msgs(test_folder):
 
 if __name__=="__main__":
 
-    test_folder = u'D:\\'
+    test_folder = 'D:\\'
     #test_status_msg(test_folder+'test.msg')
     #test_folder_msgs(test_folder)

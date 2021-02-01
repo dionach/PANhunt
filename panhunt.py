@@ -6,9 +6,9 @@
 # PANhunt: search directories and sub directories for documents with PANs
 # By BB
 
-import os, sys, zipfile, re, datetime, cStringIO, argparse, time, hashlib, unicodedata, platform
+import os, sys, zipfile, re, datetime, io, argparse, time, hashlib, unicodedata, platform
 import colorama
-import ConfigParser
+import configparser
 import progressbar
 import filehunt
 
@@ -16,16 +16,16 @@ app_version = '1.2'
 
 # defaults
 defaults = {
-    'search_dir': u'C:\\',
-    'output_file': u'panhunt_%s.txt' % time.strftime("%Y-%m-%d-%H%M%S"),
-    'excluded_directories_string': u'C:\\Windows,C:\\Program Files,C:\\Program Files (x86)',
-    'text_extensions_string':  u'.doc,.xls,.xml,.txt,.csv,.log',
-    'zip_extensions_string': u'.docx,.xlsx,.zip',
-    'special_extensions_string': u'.msg',
-    'mail_extensions_string': u'.pst',
-    'other_extensions_string': u'.ost,.accdb,.mdb', # checks for existence of files that can't be checked automatically
+    'search_dir': 'C:\\',
+    'output_file': 'panhunt_%s.txt' % time.strftime("%Y-%m-%d-%H%M%S"),
+    'excluded_directories_string': 'C:\\Windows,C:\\Program Files,C:\\Program Files (x86)',
+    'text_extensions_string':  '.doc,.xls,.xml,.txt,.csv,.log',
+    'zip_extensions_string': '.docx,.xlsx,.zip',
+    'special_extensions_string': '.msg',
+    'mail_extensions_string': '.pst',
+    'other_extensions_string': '.ost,.accdb,.mdb', # checks for existence of files that can't be checked automatically
     'excluded_pans_string': '',
-    'config_file': u'panhunt.ini'
+    'config_file': 'panhunt.ini'
 }
 search_dir = defaults['search_dir']
 output_file = defaults['output_file']
@@ -69,7 +69,7 @@ class PANFile(filehunt.AFile):
     def check_text_regexs(self, text, regexs, sub_path):
         """Uses regular expressions to check for PANs in text"""
 
-        for brand, regex in regexs.items():
+        for brand, regex in list(regexs.items()):
             pans = regex.findall(text)
             if pans:
                 for pan in pans:
@@ -140,11 +140,11 @@ class PAN:
 
 def get_text_hash(text):
 
-    if type(text) is unicode:
+    if type(text) is str:
         encoded_text = text.encode('utf-8')
     else:
         encoded_text = text
-    return hashlib.sha512(encoded_text+'PAN').hexdigest()
+    return hashlib.sha512(encoded_text+'PAN'.encode('utf-8')).hexdigest()
 
 
 def add_hash_to_file(text_file):
@@ -163,10 +163,10 @@ def check_file_hash(text_file):
     hash_in_file =  text_output[hash_pos+len(os.linesep):]
     hash_check = get_text_hash(text_output[:hash_pos])
     if hash_in_file == hash_check:
-        print colorama.Fore.GREEN + 'Hashes OK'
+        sys.stdout.buffer.write(colorama.Fore.GREEN.encode('ascii','ignore') + 'Hashes OK\n'.encode('ascii','ignore'))
     else:
-        print colorama.Fore.RED + 'Hashes Not OK'
-    print colorama.Fore.WHITE + hash_in_file +'\n' + hash_check
+        sys.stdout.buffer.write(colorama.Fore.RED.encode('ascii','ignore') + 'Hashes Not OK\n'.encode('ascii','ignore'))
+    sys.stdout.buffer.write(colorama.Fore.WHITE.encode('ascii','ignore') + hash_in_file +'\n' + hash_check)
 
 
 def output_report(search_dir, excluded_directories_string, all_files, total_files_searched, pans_found, output_file, mask_pans):
@@ -179,21 +179,21 @@ def output_report(search_dir, excluded_directories_string, all_files, total_file
     pan_report += u'Searched %s files. Found %s possible PANs.\n%s\n\n' % (total_files_searched, pans_found, '='*100)
     
     for afile in sorted([afile for afile in all_files if afile.matches]):
-        pan_header = u'FOUND PANs: %s (%s %s)' % (afile.path, afile.size_friendly(), afile.modified.strftime('%d/%m/%Y'))
-        print colorama.Fore.RED + filehunt.unicode2ascii(pan_header)
+        pan_header = 'FOUND PANs: %s (%s %s)' % (afile.path, afile.size_friendly(), afile.modified.strftime('%d/%m/%Y'))
+        sys.stdout.buffer.write(colorama.Fore.RED.encode('ascii','ignore') + filehunt.unicode2ascii(pan_header) + '\n'.encode('ascii','ignore'))
         pan_report += pan_header + '\n'
-        pan_list = u'\t' + pan_sep.join([pan.__repr__(mask_pans) for pan in afile.matches])
-        print colorama.Fore.YELLOW + filehunt.unicode2ascii(pan_list)
+        pan_list = '\t' + pan_sep.join([pan.__repr__(mask_pans) for pan in afile.matches])
+        sys.stdout.buffer.write(colorama.Fore.YELLOW.encode('ascii','ignore') + filehunt.unicode2ascii(pan_list) + '\n'.encode('ascii','ignore'))
         pan_report += pan_list + '\n\n'
     
     if len([afile for afile in all_files if afile.type == 'OTHER']) <> 0:
         pan_report += u'Interesting Files to check separately:\n'
     for afile in sorted([afile for afile in all_files if afile.type == 'OTHER']):
-        pan_report += u'%s (%s %s)\n' % (afile.path, afile.size_friendly(), afile.modified.strftime('%d/%m/%Y'))
+        pan_report += '%s (%s %s)\n' % (afile.path, afile.size_friendly(), afile.modified.strftime('%d/%m/%Y'))
 
     pan_report = pan_report.replace('\n', os.linesep)
 
-    print colorama.Fore.WHITE + 'Report written to %s' % filehunt.unicode2ascii(output_file)
+    sys.stdout.buffer.write(colorama.Fore.WHITE.encode('ascii','ignore') + 'Report written to '.encode('ascii','ignore') + filehunt.unicode2ascii(output_file) + '\n'.encode('ascii','ignore'))
     filehunt.write_unicode_file(output_file, pan_report)
     add_hash_to_file(output_file)
 
@@ -306,8 +306,8 @@ if __name__ == "__main__":
     mail_extensions_string = unicode(args.mailfiles)
     other_extensions_string = unicode(args.otherfiles)
     mask_pans = not args.unmask
-    excluded_pans_string = unicode(args.excludepan)
-    config_file = unicode(args.config)
+    excluded_pans_string = str(args.excludepan)
+    config_file = str(args.config)
     load_config_file()
         
     set_global_parameters()
