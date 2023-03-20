@@ -3,6 +3,8 @@ PANhunt
 
 ## Introduction
 
+NOTE: This is a fork of original PANHunt as an effort to migrate to Python 3. It is heavily modified and refactored. There may be issues with functinality. Do not use in production!
+
 PANhunt is a tool that can be used to search drives for credit card numbers (PANs). This is useful for checking PCI DSS scope accuracy. It's designed to be a simple, standalone tool that can be run from a USB stick. PANhunt includes a python PST file parser.
 
 ## Build
@@ -11,7 +13,7 @@ PANhunt is a Python script that can be easily converted to a standalone Windows 
 
 panhunt.py requires:
 
-	- Python 2.7
+	- Python 3.6+
 	- Colorama (https://pypi.python.org/pypi/colorama)
 	- Progressbar (https://pypi.python.org/pypi/progressbar)
 	- PyInstaller (https://pypi.python.org/pypi/PyInstaller)
@@ -30,7 +32,7 @@ You will find the Windows panhunt.exe (built on Windows using pyinstaller) and t
 ```
 usage: panhunt [-h] [-s SEARCH] [-x EXCLUDE] [-t TEXTFILES] [-z ZIPFILES] [-e SPECIALFILES] [-m MAILFILES] [-l OTHERFILES] [-o OUTFILE] [-u]
 
-PAN Hunt v1.1: search directories and sub directories for documents containing PANs.
+PAN Hunt v1.3: search directories and sub directories for documents containing PANs.
 
 optional arguments:
   -h, --help       show this help message and exit
