@@ -1,4 +1,5 @@
 import codecs
+from ctypes import ArgumentError
 import datetime as dt
 import os
 import pickle
@@ -35,7 +36,7 @@ def unicode2ascii(unicode_str: str) -> str:
 
 
 def bytes_to_time(datetime_bytes: bytes) -> dt.datetime:
-    return dt.datetime(year=1601, month=1, day=1) + dt.timedelta(microseconds=struct.unpack('q', datetime_bytes)[0] / 10.0)
+    return dt.datetime(year=1601, month=1, day=1) + dt.timedelta(microseconds=unpack_integer('q', datetime_bytes) / 10.0)
 
 
 def to_zeropaddedhex(value, fixed_length: int) -> str:
@@ -94,5 +95,26 @@ def size_friendly(size: int) -> str:
     return f"{(size / (1024 * 1024 * 1024))}GB"
 
 
+def datetime_from_filetime(timestamp: int) -> dt.datetime:
+    # timestamp: a 64-bit integer representing the number of 100-nanosecond intervals since January 1, 1601
+    return dt.datetime(1601, 1, 1, tzinfo=dt.timezone.utc) + dt.timedelta(microseconds=timestamp // 10)
+
+
+def datetime_from_filetime_bytes(timestamp: bytes) -> dt.datetime:
+    return datetime_from_filetime(int.from_bytes(timestamp, 'little'))
+
 # TODO: Write a typed wrapper for stuct.unpack with ENUM for format: https://docs.python.org/3/library/struct.html#format-characters
-# unpack(bytes, type1, type2=None,type3=None)
+
+
+def unpack_integer(format: str, buffer: bytes) -> int:
+    if format in ['b', 'B', 'h', 'H', 'i', 'I', 'l', 'L', 'q', 'Q', 'n', 'N', 'P']:
+        return int(struct.unpack(format, buffer)[0])
+    else:
+        raise ArgumentError(format, buffer)
+
+
+def unpack_float(format: str, buffer: bytes) -> float:
+    if format in ['e', 'f', 'd']:
+        return float(struct.unpack(format, buffer)[0])
+    else:
+        raise ArgumentError(format, buffer)

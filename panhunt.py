@@ -89,11 +89,16 @@ class PANFile(filehunt.AFile):
 class PAN:
     """PAN: A class for recording PANs, their brand and where they were found"""
 
-    def __init__(self, path, sub_path, brand, pan) -> None:
+    pan: str
+    path: str
+    sub_path: str
+    brand: str
+
+    def __init__(self, path: str, sub_path: str, brand: str, pan: str) -> None:
 
         self.path, self.sub_path, self.brand, self.pan = path, sub_path, brand, pan
 
-    def __repr__(self, mask_pan=True):
+    def __repr__(self, mask_pan=True) -> str:
 
         if mask_pan:
             pan_out = self.get_masked_pan()
@@ -101,7 +106,7 @@ class PAN:
             pan_out = self.pan
         return '%s %s:%s' % (self.sub_path, self.brand, pan_out)
 
-    def get_masked_pan(self):
+    def get_masked_pan(self) -> str:
         return re.sub(r'\d', '*', self.pan[:-4]) + self.pan[-4:]
 
     @staticmethod

@@ -10,26 +10,28 @@ import datetime as dt
 import os
 import struct
 from io import BufferedReader
-from typing import TYPE_CHECKING, Any, Optional, TypeAlias
-from PType import PType
-from PTypeEnum import PTypeEnum
-from PropIdEnum import PropIdEnum
+from typing import TYPE_CHECKING, Optional, TypeAlias, Union
 
 import panutils
 from panutils import write_ascii_file, write_unicode_file
+from PropIdEnum import PropIdEnum
+from PType import PType
+from PTypeEnum import PTypeEnum
 
 TYPE_CHECKING = True
 if TYPE_CHECKING:
     from _typeshed import FileDescriptorOrPath
 
 _FilePathOrFileObject: TypeAlias = FileDescriptorOrPath | BufferedReader
+_ValueType = Optional[Union[int, float, dt.datetime, bool, str,
+                            bytes, list[int], list[float], list[dt.datetime], list[bytes], list[str]]]
 
 
 class MSGException(BaseException):
     pass
 
 
-error_log_list: list = []
+# error_log_list: list = []
 
 
 ###################################################################################################################################
@@ -207,7 +209,7 @@ class DirectoryEntry:
             raise MSGException('Directory Entry not 128 bytes')
 
         self.mscfb = mscfb
-        self.NameLength = struct.unpack('H', directory_bytes[64:66])[0]
+        self.NameLength = panutils.unpack_integer('H', directory_bytes[64:66])
         if self.NameLength > 64:
             raise MSGException('Directory Entry name cannot be longer than 64')
         self.Name: str = directory_bytes[:self.NameLength -
@@ -217,7 +219,7 @@ class DirectoryEntry:
         self.SiblingID, self.RightSiblingID, self.ChildID = struct.unpack(
             'III', directory_bytes[68:80])
         self.CLSID = struct.unpack('16s', directory_bytes[80:96])[0]
-        self.StateBits = struct.unpack('I', directory_bytes[96:100])[0]
+        self.StateBits = panutils.unpack_integer('I', directory_bytes[96:100])
         creation_time_bytes, modified_time_bytes = struct.unpack(
             '8s8s', directory_bytes[100:116])
         if creation_time_bytes == '\x00' * 8:
@@ -230,7 +232,8 @@ class DirectoryEntry:
             self.ModifiedTime = panutils.bytes_to_time(modified_time_bytes)
         self.StartingSectorLocation = struct.unpack(
             'I', directory_bytes[116:120])[0]
-        self.StreamSize = struct.unpack('Q', directory_bytes[120:128])[0]
+        self.StreamSize = panutils.unpack_integer(
+            'Q', directory_bytes[120:128])
         if mscfb.MajorVersion == 3:
             self.StreamSize = self.StreamSize & 0xFFFFFFFF  # upper 32 bits may not be zero
         self.childs = {}
@@ -254,7 +257,10 @@ class DirectoryEntry:
 
         line_pfx: str = '\t' * level
         s: str = ''
-        for child_entry in sorted(self.childs.values()):
+        sorted_entries: list[DirectoryEntry] = [
+            i for i in self.childs.values()]
+        sorted_entries.sort(key=lambda x: x.Name)
+        for child_entry in sorted_entries:
             line_sfx: str = ''
             if child_entry.ObjectType == DirectoryEntry.OBJECT_STORAGE:
                 line_sfx = f"({len(list(child_entry.childs.keys()))})"
@@ -276,21 +282,21 @@ class MSCFB:
     SectorSize: int
     MiniStreamSectorLocation: int
     MiniStreamSize: int
-    MinorVersion:int
-    MajorVersion:int
-    ByteOrder:int
-    SectorShift:int
-    MiniSectorShift:int
-    DirectorySector:int
-    FATSectors:int
-    FirstDirectorySectorLocation:int
-    TransactionSignatureNumber:int
-    MiniStreamCutoffSize:int
-    FirstMiniFATSectorLocation:int
-    MiniFATSectors:int
-    FirstDIFATSectorLocation:int
-    DIFATSectors:int
-    DIFAT:tuple
+    MinorVersion: int
+    MajorVersion: int
+    ByteOrder: int
+    SectorShift: int
+    MiniSectorShift: int
+    DirectorySector: int
+    FATSectors: int
+    FirstDirectorySectorLocation: int
+    TransactionSignatureNumber: int
+    MiniStreamCutoffSize: int
+    FirstMiniFATSectorLocation: int
+    MiniFATSectors: int
+    FirstDIFATSectorLocation: int
+    DIFATSectors: int
+    DIFAT: tuple
 
     def __init__(self, cfb_file: _FilePathOrFileObject) -> None:
         """cfb_file is unicode or string filename or a file object"""
@@ -372,13 +378,18 @@ class PropertyStream:
     EMBEDDED_MSG_HEADER_SIZE: int = 24
 
     msmsg: 'MSMSG'
-    properties: dict[Any, Any]
+    properties: dict[PropIdEnum, 'PropertyEntry']
+    NextRecipientID: int
+    NextAttachmentID: int
+    RecipientCount: int
+    AttachmentCount: int
 
-    def __init__(self, msmsg_obj: 'MSMSG', parent_dir_entry, header_size: int) -> None:
+    def __init__(self, msmsg_obj: 'MSMSG', parent_dir_entry: DirectoryEntry, header_size: int) -> None:
 
         self.msmsg = msmsg_obj
-        property_dir_entry = parent_dir_entry.childs[PropertyStream.PROPERTY_STREAM_NAME]
-        property_bytes = property_dir_entry.get_data()
+        property_dir_entry: DirectoryEntry = parent_dir_entry.childs[
+            PropertyStream.PROPERTY_STREAM_NAME]
+        property_bytes: bytes = property_dir_entry.get_data()
         self.properties = {}
         if property_bytes:
             if header_size >= PropertyStream.EMBEDDED_MSG_HEADER_SIZE:
@@ -392,17 +403,18 @@ class PropertyStream:
             for i in range(property_entries_count):
                 prop_entry: PropertyEntry = PropertyEntry(
                     self.msmsg, parent_dir_entry, property_bytes[header_size + i * 16: header_size + i * 16 + 16])
-                if prop_entry in list(self.properties.keys()):
+                if prop_entry in self.properties.values():
                     raise MSGException(
                         'PropertyID already in properties dictionary')
-                self.properties[prop_entry.PropertyID] = prop_entry
+                self.properties[PropIdEnum(
+                    prop_entry.PropertyID)] = prop_entry
 
-    def getval(self, prop_id):
+    def get_value(self, prop_id: PropIdEnum) -> 'PropertyEntry':
 
-        if prop_id in list(self.properties.keys()):
-            return self.properties[prop_id].value
+        if prop_id in self.properties:
+            return self.properties[prop_id]
 
-        return None
+        raise IndexError('prop_id')
 
     def __str__(self) -> str:
         return '\n'.join([str(prop) for prop in list(self.properties.values())])
@@ -412,74 +424,137 @@ class PropertyEntry:
 
     SUB_PREFIX: str = '__substg1.0_'
 
-    def __init__(self, msmsg: 'MSMSG', parent_dir_entry, property_bytes: bytes) -> None:
+    PropertyTag: int
+    Flags: int
+    PropertyID: int
+    PropertyType: int
+    size: int
+    name: str
+    value: _ValueType
 
-        self.PropertyTag, self.Flags = struct.unpack('II', property_bytes[:8])
+    def __init__(self, msmsg: 'MSMSG', parent_dir_entry: DirectoryEntry, property_entry_bytes: bytes) -> None:
+        propertyTag: int
+        Flags: int
+        propertyTag, Flags = struct.unpack('II', property_entry_bytes[:8])
+
+        self.PropertyTag = propertyTag
+        self.Flags = Flags
         self.PropertyID = self.PropertyTag >> 16
         self.PropertyType = self.PropertyTag & 0xFFFF
-        ptype: PType = msmsg.ptypes[self.PropertyType]
+        ptype: PType = msmsg.ptype_mapping[PTypeEnum(self.PropertyType)]
         if ptype.is_variable or ptype.is_multi:
-            self.size = struct.unpack('I', property_bytes[8:12])[0]
-            stream_name = PropertyEntry.SUB_PREFIX + \
+            self.size = panutils.unpack_integer(
+                'I', property_entry_bytes[8:12])
+            stream_name: str = PropertyEntry.SUB_PREFIX + \
                 panutils.to_zeropaddedhex(self.PropertyTag, 8)
-            property_bytes = parent_dir_entry.childs[stream_name].get_data()
+            property_bytes: bytes = parent_dir_entry.childs[stream_name].get_data(
+            )
+
             if len(property_bytes) != self.size:
                 if (ptype.ptype == PTypeEnum.PtypString and len(property_bytes) + 2 != self.size) or (ptype.ptype == PTypeEnum.PtypString8 and len(property_bytes) + 1 != self.size):
                     raise MSGException(
                         'Property Entry size and byte length mismatch')
+
             if ptype.is_multi and ptype.is_variable:
                 if ptype.ptype == PTypeEnum.PtypMultipleBinary:
                     len_item_size: int = 8
                 else:  # PtypMultipleString8 or PtypMultipleString
                     len_item_size = 4
-                value_lengths = []
+
+                value_lengths: list[int] = []
                 for i in range(int(len(property_bytes) / len_item_size)):
-                    value_lengths.append(struct.unpack(
-                        'I', property_bytes[i * len_item_size:i * len_item_size + 4])[0])
-                value_bytes = []
+                    value_lengths.append(panutils.unpack_integer(
+                        'I', property_bytes[i * len_item_size:i * len_item_size + 4]))
+
+                property_byte_list: list[bytes] = []
                 for i in range(len(value_lengths)):
                     index_stream_name: str = f"{stream_name}-{i}"
-                    value_bytes.append(
+                    property_byte_list.append(
                         parent_dir_entry.childs[index_stream_name].get_data())
-                self.value = ptype.value(value_bytes)
+
+                self.value = ptype.value(
+                    b''.join(property_byte_list))
             else:
                 self.value = ptype.value(property_bytes)
 
         else:  # fixed size
             self.size = ptype.byte_count
-            self.value = ptype.value(property_bytes[8:8 + self.size])
+            self.value = ptype.value(property_entry_bytes[8:8 + self.size])
 
     def __str__(self) -> str:
-        return f"{panutils.to_hex(self.PropertyTag)}-{str(self.value)}"
+        return f"{hex(self.PropertyTag)}-{str(self.value)}"
+
+    def to_binary(self) -> bytes:
+        if isinstance(self.value, bytes):
+            return self.value
+        raise TypeError()
+
+    def to_str(self) -> str:
+        if isinstance(self.value, str):
+            return self.value
+        raise TypeError()
+
+    def to_int(self) -> int:
+        if isinstance(self.value, int):
+            return self.value
+        raise TypeError()
+
+    def to_datetime(self) -> dt.datetime:
+        if isinstance(self.value, dt.datetime):
+            return self.value
+        raise TypeError()
 
 
 class Recipient:
+    RecipientType: int
+    DisplayName: str
+    ObjectType: int
+    AddressType: str
+    EmailAddress: str
+    DisplayType: int
 
     def __init__(self, prop_stream: PropertyStream) -> None:
 
-        self.RecipientType = prop_stream.getval(PropIdEnum.PidTagRecipientType)
-        self.DisplayName = prop_stream.getval(PropIdEnum.PidTagDisplayName)
-        self.ObjectType = prop_stream.getval(PropIdEnum.PidTagObjectType)
-        self.AddressType = prop_stream.getval(PropIdEnum.PidTagAddressType)
-        self.EmailAddress = prop_stream.getval(PropIdEnum.PidTagEmailAddress)
-        self.DisplayType = prop_stream.getval(PropIdEnum.PidTagDisplayType)
+        self.RecipientType = prop_stream.get_value(
+            PropIdEnum.PidTagRecipientType).to_int()
+        self.DisplayName = prop_stream.get_value(
+            PropIdEnum.PidTagDisplayName).to_str()
+        self.ObjectType = prop_stream.get_value(
+            PropIdEnum.PidTagObjectType).to_int()
+        self.AddressType = prop_stream.get_value(
+            PropIdEnum.PidTagAddressType).to_str()
+        self.EmailAddress = prop_stream.get_value(
+            PropIdEnum.PidTagEmailAddress).to_str()
+        self.DisplayType = prop_stream.get_value(
+            PropIdEnum.PidTagDisplayType).to_int()
 
     def __str__(self) -> str:
         return f"{self.DisplayName} ({self.EmailAddress})"
 
 
 class Attachment:
+    DisplayName: str
+    AttachMethod: int
+    AttachmentSize: int
+    AttachFilename: str
+    AttachLongFilename: str
+    Filename: str
+    BinaryData: bytes
+    AttachMimeTag: str
+    AttachExtension: str
 
     def __init__(self, prop_stream: PropertyStream) -> None:
 
-        self.DisplayName = prop_stream.getval(PropIdEnum.PidTagDisplayName)
-        self.AttachMethod = prop_stream.getval(PropIdEnum.PidTagAttachMethod)
-        self.AttachmentSize = prop_stream.getval(
-            PropIdEnum.PidTagAttachmentSize)
-        self.AttachFilename = prop_stream.getval(
-            PropIdEnum.PidTagAttachFilename)  # 8.3 short name
-        self.AttachLongFilename = prop_stream.getval(
-            PropIdEnum.PidTagAttachLongFilename)
+        self.DisplayName = prop_stream.get_value(
+            PropIdEnum.PidTagDisplayName).to_str()
+        self.AttachMethod = prop_stream.get_value(
+            PropIdEnum.PidTagAttachMethod).to_int()
+        self.AttachmentSize = prop_stream.get_value(
+            PropIdEnum.PidTagAttachmentSize).to_int()
+        self.AttachFilename = prop_stream.get_value(
+            PropIdEnum.PidTagAttachFilename).to_str()
+        self.AttachLongFilename = prop_stream.get_value(
+            PropIdEnum.PidTagAttachLongFilename).to_str()
         if self.AttachLongFilename:
             self.Filename = self.AttachLongFilename
         else:
@@ -488,26 +563,51 @@ class Attachment:
             self.Filename = os.path.basename(self.Filename)
         else:
             self.Filename = f'[NoFilename_Method{self.AttachMethod}]'
-        self.data = prop_stream.getval(PropIdEnum.PidTagAttachDataBinary)
-        self.AttachMimeTag = prop_stream.getval(PropIdEnum.PidTagAttachMimeTag)
-        self.AttachExtension = prop_stream.getval(
-            PropIdEnum.PidTagAttachExtension)
+        self.BinaryData = prop_stream.get_value(
+            PropIdEnum.PidTagAttachDataBinary).to_binary()
+        self.AttachMimeTag = prop_stream.get_value(
+            PropIdEnum.PidTagAttachMimeTag).to_str()
+        self.AttachExtension = prop_stream.get_value(
+            PropIdEnum.PidTagAttachExtension).to_str()
 
     def __str__(self) -> str:
 
-        return f"{self.Filename} ({panutils.size_friendly(self.AttachmentSize)} / {panutils.size_friendly(len(self.data))})"
+        return f"{self.Filename} ({panutils.size_friendly(self.AttachmentSize)} \
+        / {panutils.size_friendly(len(self.BinaryData))})"
 
 
 class MSMSG:
+
+    cfb: MSCFB
+    validMSG: bool
+    root_dir_entry: DirectoryEntry
+    prop_stream: PropertyStream
+    recipients: list[Recipient]
+    attachments: list[Attachment]
+    ptype_mapping: dict[PTypeEnum, PType]
+    Subject: str
+    ClientSubmitTime: dt.datetime
+    SentRepresentingName: str
+    SenderName: str
+    SenderSmtpAddress: str
+    MessageDeliveryTime: dt.datetime
+    MessageFlags: int
+    MessageStatus: int
+    MessageSize: int
+    Body: str
+    TransportMessageHeaders: str
+    DisplayTo: str
+    XOriginatingIP: str
+
     def __init__(self, msg_file_path: _FilePathOrFileObject) -> None:
         """msg_file is unicode or string filename or a file object"""
 
         self.set_property_types()
-        self.cfb: MSCFB = MSCFB(msg_file_path)
-        self.validMSG: bool = self.cfb.validCFB
+        self.cfb = MSCFB(msg_file_path)
+        self.validMSG = self.cfb.validCFB
 
-        self.root_dir_entry: DirectoryEntry = self.cfb.directory.entries[0]
-        self.prop_stream: PropertyStream = PropertyStream(
+        self.root_dir_entry = self.cfb.directory.entries[0]
+        self.prop_stream = PropertyStream(
             self, self.root_dir_entry, PropertyStream.TOPLEVEL_HEADER_SIZE)  # root
 
         self.set_common_properties()
@@ -516,34 +616,38 @@ class MSMSG:
 
     def set_common_properties(self) -> None:
 
-        self.Subject = self.prop_stream.getval(PropIdEnum.PidTagSubjectW)
-        self.ClientSubmitTime = self.prop_stream.getval(
-            PropIdEnum.PidTagClientSubmitTime)
-        self.SentRepresentingName = self.prop_stream.getval(
-            PropIdEnum.PidTagSentRepresentingNameW)
-        self.SenderName = self.prop_stream.getval(PropIdEnum.PidTagSenderName)
-        self.SenderSmtpAddress = self.prop_stream.getval(
-            PropIdEnum.PidTagSenderSmtpAddress)
-        self.MessageDeliveryTime = self.prop_stream.getval(
-            PropIdEnum.PidTagMessageDeliveryTime)
-        self.MessageFlags = self.prop_stream.getval(
-            PropIdEnum.PidTagMessageFlags)
-        self.MessageStatus = self.prop_stream.getval(
-            PropIdEnum.PidTagMessageStatus)
+        self.Subject = self.prop_stream.get_value(
+            PropIdEnum.PidTagSubjectW).to_str()
+        self.ClientSubmitTime = self.prop_stream.get_value(
+            PropIdEnum.PidTagClientSubmitTime).to_datetime()
+        self.SentRepresentingName = self.prop_stream.get_value(
+            PropIdEnum.PidTagSentRepresentingNameW).to_str()
+        self.SenderName = self.prop_stream.get_value(
+            PropIdEnum.PidTagSenderName).to_str()
+        self.SenderSmtpAddress = self.prop_stream.get_value(
+            PropIdEnum.PidTagSenderSmtpAddress).to_str()
+        self.MessageDeliveryTime = self.prop_stream.get_value(
+            PropIdEnum.PidTagMessageDeliveryTime).to_datetime()
+        self.MessageFlags = self.prop_stream.get_value(
+            PropIdEnum.PidTagMessageFlags).to_int()
+        self.MessageStatus = self.prop_stream.get_value(
+            PropIdEnum.PidTagMessageStatus).to_int()
         # self.HasAttachments  = (self.MessageFlags & Message.mfHasAttach == Message.mfHasAttach)
-        self.MessageSize = self.prop_stream.getval(
-            PropIdEnum.PidTagMessageSize)
-        self.Body = self.prop_stream.getval(PropIdEnum.PidTagBody)
+        self.MessageSize = self.prop_stream.get_value(
+            PropIdEnum.PidTagMessageSize).to_int()
+        self.Body = self.prop_stream.get_value(
+            PropIdEnum.PidTagBody).to_str()
         # self.Read = (self.MessageFlags & Message.mfRead == Message.mfRead)
-        self.TransportMessageHeaders = self.prop_stream.getval(
-            PropIdEnum.PidTagTransportMessageHeaders)
-        self.DisplayTo = self.prop_stream.getval(PropIdEnum.PidTagDisplayToW)
-        self.XOriginatingIP = self.prop_stream.getval(
-            0x8028)  # x-originating-ip
+        self.TransportMessageHeaders = self.prop_stream.get_value(
+            PropIdEnum.PidTagTransportMessageHeaders).to_str()
+        self.DisplayTo = self.prop_stream.get_value(
+            PropIdEnum.PidTagDisplayToW).to_str()
+        self.XOriginatingIP = self.prop_stream.get_value(
+            PropIdEnum(0x8028)).to_str()  # x-originating-ip
 
     def set_recipients(self) -> None:
 
-        self.recipients: list[Recipient] = []
+        self.recipients = []
         recipient_dir_index: int = 0
         while True:
             recipient_dir_name: str = f'__recip_version1.0_#{panutils.to_zeropaddedhex(recipient_dir_index, 8)}'
@@ -559,12 +663,13 @@ class MSMSG:
                 break
 
     def set_attachments(self) -> None:
-        self.attachments: list[Attachment] = []
+        self.attachments = []
         attachment_dir_index: int = 0
         while True:
             attachment_dir_name: str = f'__attach_version1.0_#{panutils.to_zeropaddedhex(attachment_dir_index, 8)}'
             if attachment_dir_name in list(self.root_dir_entry.childs.keys()):
-                attachment_dir_entry = self.root_dir_entry.childs[attachment_dir_name]
+                attachment_dir_entry: DirectoryEntry = self.root_dir_entry.childs[
+                    attachment_dir_name]
                 aps: PropertyStream = PropertyStream(
                     self, attachment_dir_entry, PropertyStream.RECIP_OR_ATTACH_HEADER_SIZE)
                 attachment: Attachment = Attachment(aps)
@@ -575,7 +680,7 @@ class MSMSG:
 
     def set_property_types(self) -> None:
 
-        self.ptypes: dict[PTypeEnum, PType] = {
+        self.ptype_mapping = {
             PTypeEnum.PtypInteger16: PType(PTypeEnum.PtypInteger16, 2, False, False),
             PTypeEnum.PtypInteger32: PType(PTypeEnum.PtypInteger32, 4, False, False),
             PTypeEnum.PtypFloating32: PType(PTypeEnum.PtypFloating32, 4, False, False),
@@ -661,9 +766,9 @@ def test_folder_msgs(folder_path: str) -> None:
         dump_attachments: bool = False
         if dump_attachments:
             for attachment in msg.attachments:
-                if len(attachment.data) != 0:
+                if len(attachment.BinaryData) != 0:
                     filepath = os.path.join(folder_path, attachment.Filename)
-                    write_ascii_file(filepath, attachment.data, 'wb')
+                    write_ascii_file(filepath, attachment.BinaryData, 'wb')
         # except Exception as e:
         #    s += 'ERROR: %s\n' % e
 
