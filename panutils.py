@@ -1,12 +1,15 @@
 import codecs
-from ctypes import ArgumentError
 import datetime as dt
 import os
 import pickle
 import re
 import struct
 import unicodedata
-from typing import Any
+from ctypes import ArgumentError
+from typing import Any, Optional, Union
+
+_ValueType = Optional[Union[int, float, dt.datetime, bool, str,
+                            bytes, list[int], list[float], list[dt.datetime], list[bytes], list[str]]]
 
 
 def read_unicode_file(filename: str) -> str:
@@ -103,7 +106,7 @@ def datetime_from_filetime(timestamp: int) -> dt.datetime:
 def datetime_from_filetime_bytes(timestamp: bytes) -> dt.datetime:
     return datetime_from_filetime(int.from_bytes(timestamp, 'little'))
 
-# TODO: Write a typed wrapper for stuct.unpack with ENUM for format: https://docs.python.org/3/library/struct.html#format-characters
+# TODO: Write a typed wrapper for struct.unpack with ENUM for format: https://docs.python.org/3/library/struct.html#format-characters
 
 
 def unpack_integer(format: str, buffer: bytes) -> int:
@@ -118,3 +121,27 @@ def unpack_float(format: str, buffer: bytes) -> float:
         return float(struct.unpack(format, buffer)[0])
     else:
         raise ArgumentError(format, buffer)
+
+
+def to_binary(value: _ValueType) -> bytes:
+    if isinstance(value, bytes):
+        return value
+    raise TypeError()
+
+
+def to_str(value: _ValueType) -> str:
+    if isinstance(value, str):
+        return value
+    raise TypeError()
+
+
+def to_int(value: _ValueType) -> int:
+    if isinstance(value, int):
+        return value
+    raise TypeError()
+
+
+def to_datetime(value: _ValueType) -> dt.datetime:
+    if isinstance(value, dt.datetime):
+        return value
+    raise TypeError()
