@@ -2,7 +2,7 @@ import datetime as dt
 from typing import Literal, Optional, Union
 
 import panutils
-from msmsg import MSGException
+from exceptions import MSGException
 from PTypeEnum import PTypeEnum
 
 _ValueType = Optional[Union[int, float, dt.datetime, bool, str,

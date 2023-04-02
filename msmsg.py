@@ -11,6 +11,7 @@ import os
 import struct
 from io import BufferedReader
 from typing import TYPE_CHECKING, Optional, TypeAlias, Union
+from exceptions import MSGException
 
 import panutils
 from panutils import write_ascii_file, write_unicode_file
@@ -26,9 +27,6 @@ _FilePathOrFileObject: TypeAlias = FileDescriptorOrPath | BufferedReader
 _ValueType = Optional[Union[int, float, dt.datetime, bool, str,
                             bytes, list[int], list[float], list[dt.datetime], list[bytes], list[str]]]
 
-
-class MSGException(BaseException):
-    pass
 
 
 # error_log_list: list = []

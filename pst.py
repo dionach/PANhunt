@@ -20,6 +20,7 @@ from io import BufferedReader, BytesIO
 from typing import Any, Literal, Optional, Type, Union
 
 import progressbar
+from exceptions import PSTException
 
 import panutils
 from CryptMethodEnum import CryptMethodEnum
@@ -28,9 +29,6 @@ from PTypeEnum import PTypeEnum
 _ValueType = Optional[Union[int, float, dt.datetime, bool, str,
                             bytes, list[int], list[float], list[dt.datetime], list[bytes], list[str]]]
 
-
-class PSTException(BaseException):
-    pass
 
 
 # error_log_list = []
