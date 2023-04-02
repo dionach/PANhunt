@@ -136,6 +136,7 @@ mypy.ini
 
 # Visual studio
 .vs/
+.vscode/
 
 # Mr Developer
 .mr.developer.cfg
