@@ -6,27 +6,24 @@
 # based on MS-OXMSG and MS-CFB Microsoft specification for MSG file format [MS-OXMSG].pdf v20140130
 #
 
-import datetime as dt
 import os
 import struct
+from datetime import datetime
 from io import BufferedReader
 from typing import TYPE_CHECKING, Optional, TypeAlias, Union
-from exceptions import MSGException
 
 import panutils
+from exceptions import MSGException
 from panutils import write_ascii_file, write_unicode_file
 from PropIdEnum import PropIdEnum
 from PType import PType
 from PTypeEnum import PTypeEnum
 
-TYPE_CHECKING = True
-if TYPE_CHECKING:
-    from _typeshed import FileDescriptorOrPath
+_FilePathOrFileObject: TypeAlias = BufferedReader | int | str | bytes | os.PathLike[
+    str] | os.PathLike[bytes]
 
-_FilePathOrFileObject: TypeAlias = FileDescriptorOrPath | BufferedReader
-_ValueType = Optional[Union[int, float, dt.datetime, bool, str,
-                            bytes, list[int], list[float], list[dt.datetime], list[bytes], list[str]]]
-
+_ValueType = Optional[Union[int, float, datetime, bool, str,
+                            bytes, list[int], list[float], list[datetime], list[bytes], list[str]]]
 
 
 # error_log_list: list = []
@@ -193,8 +190,8 @@ class DirectoryEntry:
     ChildID: int
     CLSID: bytes
     StateBits: int
-    CreationTime: Optional[dt.datetime]
-    ModifiedTime: Optional[dt.datetime]
+    CreationTime: Optional[datetime]
+    ModifiedTime: Optional[datetime]
     NameLength: int
     StreamSize: int
     StartingSectorLocation: int
@@ -497,8 +494,8 @@ class PropertyEntry:
             return self.value
         raise TypeError()
 
-    def to_datetime(self) -> dt.datetime:
-        if isinstance(self.value, dt.datetime):
+    def to_datetime(self) -> datetime:
+        if isinstance(self.value, datetime):
             return self.value
         raise TypeError()
 
@@ -584,11 +581,11 @@ class MSMSG:
     attachments: list[Attachment]
     ptype_mapping: dict[PTypeEnum, PType]
     Subject: str
-    ClientSubmitTime: dt.datetime
+    ClientSubmitTime: datetime
     SentRepresentingName: str
     SenderName: str
     SenderSmtpAddress: str
-    MessageDeliveryTime: dt.datetime
+    MessageDeliveryTime: datetime
     MessageFlags: int
     MessageStatus: int
     MessageSize: int

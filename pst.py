@@ -20,15 +20,14 @@ from io import BufferedReader, BytesIO
 from typing import Any, Literal, Optional, Type, Union
 
 import progressbar
-from exceptions import PSTException
 
 import panutils
 from CryptMethodEnum import CryptMethodEnum
+from exceptions import PSTException
 from PTypeEnum import PTypeEnum
 
 _ValueType = Optional[Union[int, float, dt.datetime, bool, str,
                             bytes, list[int], list[float], list[dt.datetime], list[bytes], list[str]]]
-
 
 
 # error_log_list = []
@@ -897,7 +896,8 @@ class PType:
                 value_bytes)
             s: list[str] = []
             for i in range(ulCount):
-                s.append(value_bytes[rgulDataOffsets[i]                         :rgulDataOffsets[i + 1]].decode('utf-16-le'))
+                s.append(value_bytes[rgulDataOffsets[i]
+                         :rgulDataOffsets[i + 1]].decode('utf-16-le'))
             return s
         if self.ptype == PTypeEnum.PtypMultipleString8:
             ulCount, rgulDataOffsets = self.get_multi_value_offsets(
@@ -2481,7 +2481,7 @@ def test_dump_pst(pst_filepath, output_path) -> None:
     pst.close()
 
 
-def test_folder_psts(psts_folder):
+def test_folder_psts(psts_folder) -> None:
 
     # global error_log_list
 
@@ -2489,7 +2489,7 @@ def test_folder_psts(psts_folder):
     for pst_filepath in [os.path.join(psts_folder, filename) for filename in os.listdir(psts_folder) if os.path.isfile(os.path.join(psts_folder, filename)) and os.path.splitext(filename.lower())[1] == '.pst']:
         try:
             s += 'Opening %s\n' % pst_filepath
-            error_log_list = []
+            # error_log_list = []
             pst = PST(pst_filepath)
             status: str = panutils.unicode2ascii(pst.get_pst_status())
             print(status)
@@ -2500,7 +2500,7 @@ def test_folder_psts(psts_folder):
                     password = ' (%s)' % password
             s += status + password + '\n'
             pst.close()
-            s += '\n'.join(error_log_list)
+            # s += '\n'.join(error_log_list)
             s += '\n\n\n'
         except Exception as e:
             s += 'ERROR: %s\n' % e
@@ -2520,7 +2520,7 @@ def test_folder_psts(psts_folder):
 
 if __name__ == "__main__":
 
-    input_pst_file = ''
+    input_pst_file: str = ''
     output_folder = 'dump'
 
     arg_parser = argparse.ArgumentParser(
@@ -2536,8 +2536,8 @@ if __name__ == "__main__":
 
     if not args.debug:
 
-        input_pst_file = args.input_pst_file
-        output_folder = args.output_folder
+        input_pst_file = str(args.input_pst_file)
+        output_folder = str(args.output_folder)
 
         if not os.path.exists(input_pst_file):
             print('Input PST file does not exist')

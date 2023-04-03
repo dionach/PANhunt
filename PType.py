@@ -1,12 +1,12 @@
-import datetime as dt
+from datetime import datetime, timedelta
 from typing import Literal, Optional, Union
 
 import panutils
 from exceptions import MSGException
 from PTypeEnum import PTypeEnum
 
-_ValueType = Optional[Union[int, float, dt.datetime, bool, str,
-                            bytes, list[int], list[float], list[dt.datetime], list[bytes], list[str]]]
+_ValueType = Optional[Union[int, float, datetime, bool, str,
+                            bytes, list[int], list[float], list[datetime], list[bytes], list[str]]]
 
 
 class PType:
@@ -107,13 +107,13 @@ class PType:
         return [panutils.unpack_float(
             format_dict[bit_size], value_bytes[i * count:(i + 1) * count]) for i in range(count)]
 
-    def get_floating_time(self, time_bytes: bytes) -> dt.datetime:
+    def get_floating_time(self, time_bytes: bytes) -> datetime:
 
-        return dt.datetime(year=1899, month=12, day=30) + dt.timedelta(days=panutils.unpack_float('d', time_bytes))
+        return datetime(year=1899, month=12, day=30) + timedelta(days=panutils.unpack_float('d', time_bytes))
 
-    def get_time(self, time_bytes: bytes) -> dt.datetime:
+    def get_time(self, time_bytes: bytes) -> datetime:
 
-        return dt.datetime(year=1601, month=1, day=1) + dt.timedelta(microseconds=panutils.unpack_integer('q', time_bytes) / 10.0)
+        return datetime(year=1601, month=1, day=1) + timedelta(microseconds=panutils.unpack_integer('q', time_bytes) / 10.0)
 
     def get_multi_value_offsets(self, value_bytes: bytes) -> tuple[int, list[int]]:
 
