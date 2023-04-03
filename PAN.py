@@ -1,7 +1,5 @@
 import re
 
-from panhunt import excluded_pans
-
 
 class PAN:
     """PAN: A class for recording PANs, their brand and where they were found"""
@@ -25,15 +23,6 @@ class PAN:
 
     def get_masked_pan(self) -> str:
         return re.sub(r'\d', '*', self.pan[:-4]) + self.pan[-4:]
-
-    @staticmethod
-    def is_excluded(pan) -> bool:
-        global excluded_pans
-
-        for excluded_pan in excluded_pans:
-            if pan == excluded_pan:
-                return True
-        return False
 
     @staticmethod
     def is_valid_luhn_checksum(pan: str) -> bool:

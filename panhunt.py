@@ -18,42 +18,13 @@ import time
 import colorama
 import progressbar
 from PANFile import PANFile
+from config import PANHuntConfigSingleton
 
 import panutils
 
 TEXT_FILE_SIZE_LIMIT: int = 1073741824  # 1Gb
 
 app_version = '1.3'
-
-# defaults
-# TODO: Use a config class as singleton and move these values there
-defaults: dict[str, str] = {
-    'search_dir': 'C:\\',
-    'output_file': 'panhunt_%s.txt' % time.strftime("%Y-%m-%d-%H%M%S"),
-    'excluded_directories_string': 'C:\\Windows,C:\\Program Files,C:\\Program Files (x86)',
-    'text_extensions_string': '.doc,.xls,.xml,.txt,.csv,.log',
-    'zip_extensions_string': '.docx,.xlsx,.zip',
-    'special_extensions_string': '.msg',
-    'mail_extensions_string': '.pst',
-    # checks for existence of files that can't be checked automatically
-    'other_extensions_string': '.ost,.accdb,.mdb',
-    'excluded_pans_string': '',
-    'config_file': 'panhunt.ini'
-}
-search_dir: str = defaults['search_dir']
-output_file = defaults['output_file']
-excluded_directories_string = defaults['excluded_directories_string']
-text_extensions_string = defaults['text_extensions_string']
-zip_extensions_string = defaults['zip_extensions_string']
-special_extensions_string = defaults['special_extensions_string']
-mail_extensions_string = defaults['mail_extensions_string']
-other_extensions_string = defaults['other_extensions_string']
-excluded_pans_string = defaults['excluded_pans_string']
-config_file = defaults['config_file']
-
-excluded_directories = None
-excluded_pans: list[str] = []
-search_extensions = {}
 
 pan_regexs = {'Mastercard': re.compile(r'(?:\D|^)(5[1-5][0-9]{2}(?:\ |\-|)[0-9]{4}(?:\ |\-|)[0-9]{4}(?:\ |\-|)[0-9]{4})(?:\D|$)'),
               'Visa': re.compile(r'(?:\D|^)(4[0-9]{3}(?:\ |\-|)[0-9]{4}(?:\ |\-|)[0-9]{4}(?:\ |\-|)[0-9]{4})(?:\D|$)'),
@@ -82,7 +53,7 @@ def get_text_hash(text: str | bytes) -> str:
     return hashlib.sha512(encoded_text + 'PAN'.encode('utf-8')).hexdigest()
 
 
-def add_hash_to_file(text_file) -> None:
+def add_hash_to_file(text_file: str) -> None:
 
     text: str = panutils.read_unicode_file(text_file)
     hash_check: str = get_text_hash(text)
@@ -91,7 +62,7 @@ def add_hash_to_file(text_file) -> None:
     panutils.write_unicode_file(text_file, text)
 
 
-def check_file_hash(text_file) -> None:
+def check_file_hash(text_file: str) -> None:
 
     text_output: str = panutils.read_unicode_file(text_file)
     hash_pos: int = text_output.rfind(os.linesep)
@@ -104,13 +75,13 @@ def check_file_hash(text_file) -> None:
     print(colorama.Fore.WHITE + hash_in_file + '\n' + hash_check)
 
 
-def output_report(search_dir: str, excluded_directories_string: str, all_files: list, total_files_searched: int, pans_found: int, output_file: str, mask_pans: bool) -> None:
+def output_report(conf: PANHuntConfigSingleton, all_files: list, total_files_searched: int, pans_found: int) -> None:
 
     pan_sep: str = '\n\t'
     pan_report: str = 'PAN Hunt Report - %s\n%s\n' % (
         time.strftime("%H:%M:%S %d/%m/%Y"), '=' * 100)
     pan_report += 'Searched %s\nExcluded %s\n' % (
-        search_dir, excluded_directories_string)
+        conf.search_dir, ','.join(conf.excluded_directories))
     pan_report += 'Command: %s\n' % (' '.join(sys.argv))
     pan_report += 'Uname: %s\n' % (' | '.join(platform.uname()))
     pan_report += 'Searched %s files. Found %s possible PANs.\n%s\n\n' % (
@@ -122,7 +93,8 @@ def output_report(search_dir: str, excluded_directories_string: str, all_files: 
         print(colorama.Fore.RED + panutils.unicode2ascii(pan_header))
         pan_report += pan_header + '\n'
         pan_list: str = '\t' + \
-            pan_sep.join([pan.__repr__(mask_pans) for pan in afile.matches])
+            pan_sep.join([pan.__repr__(conf.mask_pans)
+                         for pan in afile.matches])
         print(colorama.Fore.YELLOW +
               panutils.unicode2ascii(pan_list))
         pan_report += pan_list + '\n\n'
@@ -136,78 +108,28 @@ def output_report(search_dir: str, excluded_directories_string: str, all_files: 
     pan_report = pan_report.replace('\n', os.linesep)
 
     print(colorama.Fore.WHITE +
-          f'Report written to {panutils.unicode2ascii(output_file)}')
-    panutils.write_unicode_file(output_file, pan_report)
-    add_hash_to_file(output_file)
+          f'Report written to {panutils.unicode2ascii(conf.output_file)}')
+    panutils.write_unicode_file(conf.output_file, pan_report)
+    add_hash_to_file(conf.output_file)
 
 
-def load_config_file() -> None:
+def hunt_pans(conf: PANHuntConfigSingleton, gauge_update_function=None):
 
-    global config_file, defaults, search_dir, output_file, excluded_directories_string, text_extensions_string, zip_extensions_string, special_extensions_string, mail_extensions_string, other_extensions_string, mask_pans, excluded_pans_string
-
-    if not os.path.isfile(config_file):
-        return
-
-    config: configparser.ConfigParser = configparser.ConfigParser()
-    config.read(config_file)
-    defaultConfig = {}
-    for nvp in config.items('DEFAULT'):
-        defaultConfig[nvp[0]] = nvp[1]
-
-    if 'search' in defaultConfig and search_dir == defaults['search_dir']:
-        search_dir = defaultConfig['search']
-    if 'exclude' in defaultConfig and excluded_directories_string == defaults['excluded_directories_string']:
-        excluded_directories_string = defaultConfig['exclude']
-    if 'textfiles' in defaultConfig and text_extensions_string == defaults['text_extensions_string']:
-        text_extensions_string = defaultConfig['textfiles']
-    if 'zipfiles' in defaultConfig and zip_extensions_string == defaults['zip_extensions_string']:
-        zip_extensions_string = defaultConfig['zipfiles']
-    if 'specialfiles' in defaultConfig and special_extensions_string == defaults['special_extensions_string']:
-        special_extensions_string = defaultConfig['specialfiles']
-    if 'mailfiles' in defaultConfig and mail_extensions_string == defaults['mail_extensions_string']:
-        mail_extensions_string = defaultConfig['mailfiles']
-    if 'otherfiles' in defaultConfig and other_extensions_string == defaults['other_extensions_string']:
-        other_extensions_string = defaultConfig['otherfiles']
-    if 'outfile' in defaultConfig and output_file == defaults['output_file']:
-        output_file = defaultConfig['outfile']
-    if 'unmask' in defaultConfig:
-        mask_pans = not (defaultConfig['unmask'].upper() == 'TRUE')
-    if 'excludepans' in defaultConfig and excluded_pans_string == defaults['excluded_pans_string']:
-        excluded_pans_string = defaultConfig['excludepans']
-
-
-def set_global_parameters() -> None:
-
-    global excluded_directories_string, text_extensions_string, zip_extensions_string, special_extensions_string, mail_extensions_string, other_extensions_string, excluded_directories, search_extensions, excluded_pans_string, excluded_pans
-
-    excluded_directories = [exc_dir.lower()
-                            for exc_dir in excluded_directories_string.split(',')]
-    search_extensions['TEXT'] = text_extensions_string.split(',')
-    search_extensions['ZIP'] = zip_extensions_string.split(',')
-    search_extensions['SPECIAL'] = special_extensions_string.split(',')
-    search_extensions['MAIL'] = mail_extensions_string.split(',')
-    search_extensions['OTHER'] = other_extensions_string.split(',')
-    if len(excluded_pans_string) > 0:
-        excluded_pans = excluded_pans_string.split(',')
-
-
-def hunt_pans(gauge_update_function=None):
-
-    global search_dir, excluded_directories, search_extensions
+    # global search_dir, excluded_directories, search_extensions
 
     # find all files to check
     all_files = find_all_files_in_directory(
-        PANFile, search_dir, excluded_directories, search_extensions, gauge_update_function)
+        PANFile, search_dir, conf.excluded_directories, conf.search_extensions, gauge_update_function)
 
     # check each file
     total_docs, doc_pans_found = find_all_regexs_in_files([afile for afile in all_files if not afile.errors and afile.type in (
-        'TEXT', 'ZIP', 'SPECIAL')], pan_regexs, search_extensions, 'PAN', gauge_update_function)
+        'TEXT', 'ZIP', 'SPECIAL')], pan_regexs, conf.search_extensions, 'PAN', gauge_update_function)
     # check each pst message and attachment
     total_psts, pst_pans_found = find_all_regexs_in_psts(
-        [afile for afile in all_files if not afile.errors and afile.type == 'MAIL'], pan_regexs, search_extensions, 'PAN', gauge_update_function)
+        [afile for afile in all_files if not afile.errors and afile.type == 'MAIL'], pan_regexs, conf.search_extensions, 'PAN', gauge_update_function)
 
-    total_files_searched = total_docs + total_psts
-    pans_found = doc_pans_found + pst_pans_found
+    total_files_searched: int = total_docs + total_psts
+    pans_found: int = doc_pans_found + pst_pans_found
 
     return total_files_searched, pans_found, all_files
 
@@ -345,53 +267,64 @@ if __name__ == "__main__":
     arg_parser: argparse.ArgumentParser = argparse.ArgumentParser(prog='panhunt', description='PAN Hunt v%s: search directories and sub directories for documents containing PANs.' % (
         app_version), formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     arg_parser.add_argument(
-        '-s', dest='search', default=search_dir, help='base directory to search in')
-    arg_parser.add_argument('-x', dest='exclude', default=excluded_directories_string,
+        '-s', dest='search', help='base directory to search in')
+    arg_parser.add_argument('-x', dest='exclude',
                             help='directories to exclude from the search')
     arg_parser.add_argument(
-        '-t', dest='textfiles', default=text_extensions_string, help='text file extensions to search')
+        '-t', dest='text_files', help='text file extensions to search')
     arg_parser.add_argument(
-        '-z', dest='zipfiles', default=zip_extensions_string, help='zip file extensions to search')
-    arg_parser.add_argument('-e', dest='specialfiles',
-                            default=special_extensions_string, help='special file extensions to search')
+        '-z', dest='zip_files', help='zip file extensions to search')
+    arg_parser.add_argument('-e', dest='special_files',
+                            help='special file extensions to search')
     arg_parser.add_argument(
-        '-m', dest='mailfiles', default=mail_extensions_string, help='email file extensions to search')
+        '-m', dest='mail_files', help='email file extensions to search')
     arg_parser.add_argument(
-        '-l', dest='otherfiles', default=other_extensions_string, help='other file extensions to list')
+        '-l', dest='other_files', help='other file extensions to list')
     arg_parser.add_argument(
-        '-o', dest='outfile', default=output_file, help='output file name for PAN report')
+        '-o', dest='outfile', help='output file name for PAN report')
     arg_parser.add_argument('-u', dest='unmask', action='store_true',
                             default=False, help='unmask PANs in output')
     arg_parser.add_argument(
-        '-C', dest='config', default=config_file, help='configuration file to use')
+        '-C', dest='config', help='configuration file to use')
     arg_parser.add_argument(
-        '-X', dest='excludepan', default=excluded_pans_string, help='PAN to exclude from search')
-    arg_parser.add_argument('-c', dest='checkfilehash',
+        '-X', dest='exclude_pan', help='PAN to exclude from search')
+    arg_parser.add_argument('-c', dest='check_file_hash',
                             help=argparse.SUPPRESS)  # hidden argument
 
     args: argparse.Namespace = arg_parser.parse_args()
 
-    if args.checkfilehash:
-        check_file_hash(args.checkfilehash)
+    if args.check_file_hash:
+        check_file_hash(args.check_file_hash)
         sys.exit()
 
     search_dir = str(args.search)
     output_file = str(args.outfile)
     excluded_directories_string = str(args.exclude)
-    text_extensions_string = str(args.textfiles)
-    zip_extensions_string = str(args.zipfiles)
-    special_extensions_string = str(args.specialfiles)
-    mail_extensions_string = str(args.mailfiles)
-    other_extensions_string = str(args.otherfiles)
-    mask_pans = not args.unmask
-    excluded_pans_string = str(args.excludepan)
+    text_extensions_string = str(args.text_files)
+    zip_extensions_string = str(args.zip_files)
+    special_extensions_string = str(args.special_files)
+    mail_extensions_string = str(args.mail_files)
+    other_extensions_string = str(args.other_files)
+    mask_pans: bool = not args.unmask
+    excluded_pans_string = str(args.exclude_pan)
     config_file = str(args.config)
-    load_config_file()
 
-    set_global_parameters()
+    panhunt_config: PANHuntConfigSingleton = PANHuntConfigSingleton.from_file(
+        config_file=config_file)
 
-    total_files_searched, pans_found, all_files = hunt_pans()
+    # Read the CLI parameters as they override the default and config file values
+    panhunt_config.from_args(search_dir=search_dir,
+                             output_file=output_file,
+                             mask_pans=mask_pans,
+                             excluded_directories_string=excluded_directories_string,
+                             text_extensions_string=text_extensions_string,
+                             zip_extensions_string=zip_extensions_string,
+                             special_extensions_string=special_extensions_string,
+                             mail_extensions_string=mail_extensions_string,
+                             other_extensions_string=other_extensions_string,
+                             excluded_pans_string=excluded_pans_string)
+
+    total_files_searched, pans_found, all_files = hunt_pans(panhunt_config)
 
     # report findings
-    output_report(search_dir, excluded_directories_string, all_files,
-                  total_files_searched, pans_found, output_file, mask_pans)
+    output_report(panhunt_config, all_files, total_files_searched, pans_found)

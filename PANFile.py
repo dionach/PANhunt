@@ -1,5 +1,6 @@
 import io
 import os
+import re
 import sys
 import zipfile
 from datetime import datetime
@@ -11,6 +12,7 @@ import progressbar
 import msmsg
 import panutils
 import pst
+from config import PANHuntConfigSingleton
 from PAN import PAN
 
 
@@ -26,16 +28,7 @@ class PANFile:
         self.type = None
         self.matches: list = []
 
-    def check_text_regexs(self, text, regexs, sub_path) -> None:
-        """Uses regular expressions to check for PANs in text"""
-
-        for brand, regex in list(regexs.items()):
-            pans = regex.findall(text)
-            if pans:
-                for pan in pans:
-                    if PAN.is_valid_luhn_checksum(pan) and not PAN.is_excluded(pan):
-                        self.matches.append(
-                            PAN(self.path, sub_path, brand, pan))
+        self.c = PANHuntConfigSingleton()
 
     def __cmp__(self, other: 'PANFile') -> bool:
 
@@ -63,7 +56,9 @@ class PANFile:
                 return datetime(1946, 2, 14, 8, 34, 56)
 
             self.set_error(sys.exc_info()[1])
+        return None
 
+    # TODO: Use a general error logging and display mechanism
     def set_error(self, error_msg) -> None:
 
         self.errors.append(error_msg)
@@ -111,6 +106,17 @@ class PANFile:
                     self.set_error(sys.exc_info()[1])
 
         return self.matches
+
+    def check_text_regexs(self, text: str, regexs: dict[str, re.Pattern], sub_path: str) -> None:
+        """Uses regular expressions to check for PANs in text"""
+
+        for brand, regex in list(regexs.items()):
+            pans = regex.findall(text)
+            if pans:
+                for pan in pans:
+                    if PAN.is_valid_luhn_checksum(pan) and not panutils.is_excluded(pan, self.c.excluded_pans):
+                        self.matches.append(
+                            PAN(self.path, sub_path, brand, pan))
 
     def check_pst_regexs(self, regexs, search_extensions, hunt_type, gauge_update_function=None):
         """ Searches a pst file for regular expressions in messages and attachments using regular expressions"""

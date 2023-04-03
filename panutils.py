@@ -145,3 +145,10 @@ def to_datetime(value: _ValueType) -> dt.datetime:
     if isinstance(value, dt.datetime):
         return value
     raise TypeError()
+
+
+def is_excluded(pan: str, excluded_pans: list[str]) -> bool:
+    for excluded_pan in excluded_pans:
+        if pan == excluded_pan:
+            return True
+    return False
