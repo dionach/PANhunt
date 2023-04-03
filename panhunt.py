@@ -26,10 +26,6 @@ TEXT_FILE_SIZE_LIMIT: int = 1073741824  # 1Gb
 
 app_version = '1.3'
 
-pan_regexs: dict[str, re.Pattern[str]] = {'Mastercard': re.compile(r'(?:\D|^)(5[1-5][0-9]{2}(?:\ |\-|)[0-9]{4}(?:\ |\-|)[0-9]{4}(?:\ |\-|)[0-9]{4})(?:\D|$)'),
-                                          'Visa': re.compile(r'(?:\D|^)(4[0-9]{3}(?:\ |\-|)[0-9]{4}(?:\ |\-|)[0-9]{4}(?:\ |\-|)[0-9]{4})(?:\D|$)'),
-                                          'AMEX': re.compile(r'(?:\D|^)((?:34|37)[0-9]{2}(?:\ |\-|)[0-9]{6}(?:\ |\-|)[0-9]{5})(?:\D|$)')}
-
 
 ###################################################################################################################################
 #  __  __           _       _        _____                 _   _
@@ -123,10 +119,10 @@ def hunt_pans(conf: PANHuntConfigSingleton, gauge_update_function=None) -> tuple
 
     # check each file
     total_docs, doc_pans_found = find_all_regexs_in_files([afile for afile in all_files if not afile.errors and afile.filetype in (
-        'TEXT', 'ZIP', 'SPECIAL')], pan_regexs, conf.search_extensions, 'PAN', gauge_update_function)
+        'TEXT', 'ZIP', 'SPECIAL')], conf.search_extensions, 'PAN', gauge_update_function)
     # check each pst message and attachment
     total_psts, pst_pans_found = find_all_regexs_in_psts(
-        [pan_file for pan_file in all_files if not pan_file.errors and pan_file.filetype == 'MAIL'], pan_regexs, conf.search_extensions, 'PAN', gauge_update_function)
+        [pan_file for pan_file in all_files if not pan_file.errors and pan_file.filetype == 'MAIL'], conf.search_extensions, 'PAN', gauge_update_function)
 
     total_files_searched: int = total_docs + total_psts
     pans_found: int = doc_pans_found + pst_pans_found
@@ -203,7 +199,7 @@ def find_all_files_in_directory(root_dir: str, excluded_directories: list[str], 
     return doc_files
 
 
-def find_all_regexs_in_files(text_or_zip_files: list[PANFile], regexs: dict[str, re.Pattern[str]], search_extensions: dict[str, list[str]], hunt_type: str, gauge_update_function=None) -> tuple[int, int]:
+def find_all_regexs_in_files(text_or_zip_files: list[PANFile], search_extensions: dict[str, list[str]], hunt_type: str, gauge_update_function=None) -> tuple[int, int]:
     """ Searches files in doc_files list for regular expressions"""
 
     if not gauge_update_function:
@@ -217,8 +213,8 @@ def find_all_regexs_in_files(text_or_zip_files: list[PANFile], regexs: dict[str,
     files_completed = 0
     matches_found = 0
 
-    for afile in text_or_zip_files:
-        matches = afile.check_regexs(regexs, search_extensions)
+    for pan_file in text_or_zip_files:
+        matches = pan_file.check_regexs(search_extensions)
         matches_found += len(matches)
         files_completed += 1
         if not gauge_update_function:
@@ -234,7 +230,7 @@ def find_all_regexs_in_files(text_or_zip_files: list[PANFile], regexs: dict[str,
     return total_files, matches_found
 
 
-def find_all_regexs_in_psts(pst_files: list[PANFile], regexs: dict[str, re.Pattern[str]], search_extensions: dict[str, list[str]], hunt_type: Literal['PAN', 'OTHER'], gauge_update_function=None) -> tuple[int, int]:
+def find_all_regexs_in_psts(pst_files: list[PANFile], search_extensions: dict[str, list[str]], hunt_type: Literal['PAN', 'OTHER'], gauge_update_function=None) -> tuple[int, int]:
     """ Searches psts in pst_files list for regular expressions in messages and attachments"""
 
     total_psts: int = len(pst_files)
@@ -242,8 +238,7 @@ def find_all_regexs_in_psts(pst_files: list[PANFile], regexs: dict[str, re.Patte
     matches_found = 0
 
     for afile in pst_files:
-        matches = afile.check_pst_regexs(
-            regexs, search_extensions, hunt_type, gauge_update_function)
+        matches = afile.check_pst_regexs(search_extensions, hunt_type, gauge_update_function)
         matches_found += len(matches)
         psts_completed += 1
 
