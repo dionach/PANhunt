@@ -45,10 +45,10 @@ class Hunter:
 
         # find all files to check
         all_files = self.__find_all_files_in_directory(
-            search_dir, conf.excluded_directories, conf.search_extensions)
+            conf.search_dir, conf.excluded_directories, conf.search_extensions)
 
         # check each file
-        total_docs, doc_pans_found = self.__find_all_regexs_in_files([afile for afile in all_files if not afile.errors and afile.filetype in (
+        total_docs, doc_pans_found = self.__find_all_regexs_in_files([pan_file for pan_file in all_files if not pan_file.errors and pan_file.filetype in (
             'TEXT', 'ZIP', 'SPECIAL')], conf.search_extensions, 'PAN')
         # check each pst message and attachment
         total_psts, pst_pans_found = self.__find_all_regexs_in_psts(
@@ -71,23 +71,23 @@ class Hunter:
         pan_report += 'Searched %s files. Found %s possible PANs.\n%s\n\n' % (
             total_files_searched, pans_found, '=' * 100)
 
-        for afile in sorted([afile for afile in all_files if afile.matches]):
+        for pan_file in sorted([afile for afile in all_files if afile.matches]):
             pan_header: str = 'FOUND PANs: %s (%s %s)' % (
-                afile.path, afile.size_friendly(), afile.modified.strftime('%d/%m/%Y'))
+                pan_file.path, pan_file.size_friendly(), pan_file.modified.strftime('%d/%m/%Y'))
             print(colorama.Fore.RED + panutils.unicode2ascii(pan_header))
             pan_report += pan_header + '\n'
             pan_list: str = '\t' + \
                 pan_sep.join([pan.__repr__(conf.mask_pans)
-                              for pan in afile.matches])
+                              for pan in pan_file.matches])
             print(colorama.Fore.YELLOW +
                   panutils.unicode2ascii(pan_list))
             pan_report += pan_list + '\n\n'
 
-        if len([afile for afile in all_files if afile.type == 'OTHER']) != 0:
+        if len([pan_file for pan_file in all_files if pan_file.type == 'OTHER']) != 0:
             pan_report += 'Interesting Files to check separately:\n'
-        for afile in sorted([afile for afile in all_files if afile.type == 'OTHER']):
-            pan_report += '%s (%s %s)\n' % (afile.path,
-                                            afile.size_friendly(), afile.modified.strftime('%d/%m/%Y'))
+        for pan_file in sorted([afile for afile in all_files if afile.type == 'OTHER']):
+            pan_report += '%s (%s %s)\n' % (pan_file.path,
+                                            pan_file.size_friendly(), pan_file.modified.strftime('%d/%m/%Y'))
 
         pan_report = pan_report.replace('\n', os.linesep)
 
@@ -119,7 +119,7 @@ class Hunter:
             for ext in ext_list:
                 extension_types[ext] = ext_type
 
-        self.pbar.create_progressbar('Doc')
+        self.pbar.create('Doc')
 
         doc_files: list[PANFile] = []
         root_dir_dirs: Optional[list[str]] = None
@@ -136,7 +136,7 @@ class Hunter:
                 root_total_items = len(root_dir_dirs) + len(files)
             if root in root_dir_dirs:
                 root_items_completed += 1
-                self.pbar.update_progressbar(
+                self.pbar.update(
                     hunt_type='Doc', items_found=docs_found, items_total=root_total_items, items_completed=root_items_completed)
 
             for filename in files:
@@ -153,7 +153,7 @@ class Hunter:
                     doc_files.append(pan_file)
                     if not pan_file.errors:
                         docs_found += 1
-                    self.pbar.update_progressbar(
+                    self.pbar.update(
                         hunt_type='Doc', items_found=docs_found, items_total=root_total_items, items_completed=root_items_completed)
 
         self.pbar.finish()
@@ -163,9 +163,9 @@ class Hunter:
     def __find_all_regexs_in_files(self, text_or_zip_files: list[PANFile], search_extensions: dict[str, list[str]], hunt_type: str) -> tuple[int, int]:
         """ Searches files in doc_files list for regular expressions"""
 
-        self.pbar.create_progressbar(hunt_type=hunt_type)
+        self.pbar.create(hunt_type=hunt_type)
 
-        total_files = len(text_or_zip_files)
+        total_files: int = len(text_or_zip_files)
         files_completed = 0
         matches_found = 0
 
@@ -173,7 +173,7 @@ class Hunter:
             matches = pan_file.check_regexs(search_extensions)
             matches_found += len(matches)
             files_completed += 1
-            self.pbar.update_progressbar(
+            self.pbar.update(
                 hunt_type=hunt_type, items_found=matches_found, items_total=total_files, items_completed=files_completed)
 
         self.pbar.finish()
@@ -223,7 +223,7 @@ class Hunter:
 #
 ###################################################################################################################################
 
-if __name__ == "__main__":
+def main() -> None:
 
     colorama.init()
 
@@ -274,20 +274,24 @@ if __name__ == "__main__":
     excluded_pans_string = str(args.exclude_pan)
     config_file = str(args.config)
 
-    panhunt_config: PANHuntConfigSingleton = PANHuntConfigSingleton.from_file(
-        config_file=config_file)
+    # First, read the hardcoded default values.
+    panhunt_config: PANHuntConfigSingleton = PANHuntConfigSingleton.instance
 
-    # Read the CLI parameters as they override the default and config file values
-    panhunt_config.from_args(search_dir=search_dir,
-                             output_file=output_file,
-                             mask_pans=mask_pans,
-                             excluded_directories_string=excluded_directories_string,
-                             text_extensions_string=text_extensions_string,
-                             zip_extensions_string=zip_extensions_string,
-                             special_extensions_string=special_extensions_string,
-                             mail_extensions_string=mail_extensions_string,
-                             other_extensions_string=other_extensions_string,
-                             excluded_pans_string=excluded_pans_string)
+    # Second, read the config file
+    panhunt_config = panhunt_config.from_file(
+        config_file=config_file).instance
+
+    # Finally, read the CLI parameters as they override the default and config file values
+    panhunt_config = panhunt_config.from_args(search_dir=search_dir,
+                                              output_file=output_file,
+                                              mask_pans=mask_pans,
+                                              excluded_directories_string=excluded_directories_string,
+                                              text_extensions_string=text_extensions_string,
+                                              zip_extensions_string=zip_extensions_string,
+                                              special_extensions_string=special_extensions_string,
+                                              mail_extensions_string=mail_extensions_string,
+                                              other_extensions_string=other_extensions_string,
+                                              excluded_pans_string=excluded_pans_string).instance
 
     total_files_searched, pans_found, all_files = hunter.hunt_pans(
         panhunt_config)
@@ -295,3 +299,20 @@ if __name__ == "__main__":
     # report findings
     hunter.output_report(panhunt_config, all_files,
                          total_files_searched, pans_found)
+
+
+if __name__ == "__main__":
+    try:
+        main()
+    except KeyboardInterrupt:
+        print('Cancelled by user.')
+        try:
+            sys.exit(0)
+        except SystemExit:
+            os._exit(0)
+    except Exception as ex:
+        print('ERROR: ' + str(ex))
+        try:
+            sys.exit(1)
+        except SystemExit:
+            os._exit(1)

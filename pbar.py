@@ -12,12 +12,12 @@ class ProgressbarSingleton:
             cls.instance = super(ProgressbarSingleton, cls).__new__(cls)
         return cls.instance
 
-    def create_progressbar(self, hunt_type: str) -> None:
+    def create(self, hunt_type: str) -> None:
         pbar_widgets: list = ['%s Hunt: ' % hunt_type, progressbar.Percentage(), ' ', progressbar.Bar(
             marker=progressbar.RotatingMarker()), ' ', progressbar.ETA(), progressbar.FormatLabel(' %ss:0' % hunt_type)]
         self.pbar = progressbar.ProgressBar(widgets=pbar_widgets).start()
 
-    def update_progressbar(self, hunt_type: str, items_found: int, items_total: int, items_completed: int) -> None:
+    def update(self, hunt_type: str, items_found: int, items_total: int, items_completed: int) -> None:
         self.pbar.widgets[6] = progressbar.FormatLabel(
             ' %ss:%s' % (hunt_type, items_found))
         self.pbar.update(items_completed * 100.0 / items_total)

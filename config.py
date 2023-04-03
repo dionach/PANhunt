@@ -77,10 +77,10 @@ class PANHuntConfigSingleton:
         """If any parameter is provided, it overwrites the previous value
         """
 
-        c = PANHuntConfigSingleton()
+        c: PANHuntConfigSingleton = PANHuntConfigSingleton().instance
 
-        PANHuntConfigSingleton.__create(search_dir, output_file, mask_pans, excluded_directories_string, text_extensions_string,
-                                        zip_extensions_string, special_extensions_string, mail_extensions_string, other_extensions_string, excluded_pans_string, c)
+        c.__update(search_dir, output_file, mask_pans, excluded_directories_string, text_extensions_string,
+                   zip_extensions_string, special_extensions_string, mail_extensions_string, other_extensions_string, excluded_pans_string, c)
 
         return c
 
@@ -93,12 +93,12 @@ class PANHuntConfigSingleton:
         """
 
         if config_file is None:
-            return PANHuntConfigSingleton()
+            return PANHuntConfigSingleton().instance
 
         if not os.path.isfile(config_file):
-            return PANHuntConfigSingleton()
+            return PANHuntConfigSingleton().instance
 
-        c = PANHuntConfigSingleton()
+        c: PANHuntConfigSingleton = PANHuntConfigSingleton().instance
 
         config: configparser.ConfigParser = configparser.ConfigParser()
         config.read(config_file)
@@ -147,35 +147,35 @@ class PANHuntConfigSingleton:
         if 'excludepans' in config_from_file:
             excluded_pans_string = str(config_from_file['excludepans'])
 
-        PANHuntConfigSingleton.__create(search_dir, output_file, mask_pans, excluded_directories_string, text_extensions_string,
-                                        zip_extensions_string, special_extensions_string, mail_extensions_string, other_extensions_string, excluded_pans_string, c)
+        c.__update(search_dir, output_file, mask_pans, excluded_directories_string, text_extensions_string,
+                   zip_extensions_string, special_extensions_string, mail_extensions_string, other_extensions_string, excluded_pans_string, c)
 
         return c
 
     @staticmethod
-    def __create(search_dir, output_file, mask_pans, excluded_directories_string, text_extensions_string, zip_extensions_string, special_extensions_string, mail_extensions_string, other_extensions_string, excluded_pans_string, c):
-        if search_dir:
+    def __update(search_dir: Optional[str], output_file: Optional[str], mask_pans: bool, excluded_directories_string: Optional[str], text_extensions_string: Optional[str], zip_extensions_string: Optional[str], special_extensions_string: Optional[str], mail_extensions_string: Optional[str], other_extensions_string: Optional[str], excluded_pans_string: Optional[str], c: 'PANHuntConfigSingleton') -> None:
+        if search_dir and search_dir != 'None':
             c.search_dir = search_dir
 
-        if output_file:
+        if output_file and output_file != 'None':
             c.output_file = output_file
 
         c.mask_pans = mask_pans
 
-        if excluded_directories_string:
+        if excluded_directories_string and excluded_directories_string != 'None':
             c.excluded_directories = [exc_dir.lower()
                                       for exc_dir in excluded_directories_string.split(',')]
-        if text_extensions_string:
+        if text_extensions_string and text_extensions_string != 'None':
             c.search_extensions['TEXT'] = text_extensions_string.split(',')
-        if zip_extensions_string:
+        if zip_extensions_string and zip_extensions_string != 'None':
             c.search_extensions['ZIP'] = zip_extensions_string.split(',')
-        if special_extensions_string:
+        if special_extensions_string and special_extensions_string != 'None':
             c.search_extensions['SPECIAL'] = special_extensions_string.split(
                 ',')
-        if mail_extensions_string:
+        if mail_extensions_string and mail_extensions_string != 'None':
             c.search_extensions['MAIL'] = mail_extensions_string.split(',')
-        if other_extensions_string:
+        if other_extensions_string and other_extensions_string != 'None':
             c.search_extensions['OTHER'] = other_extensions_string.split(
                 ',')
-        if excluded_pans_string and len(excluded_pans_string) > 0:
+        if excluded_pans_string and excluded_pans_string != excluded_pans_string and len(excluded_pans_string) > 0:
             c.excluded_pans = excluded_pans_string.split(',')

@@ -308,6 +308,7 @@ class MSCFB:
         self.read_header(self.fd)
         if not self.validCFB:
             # DevSkim: ignore DS187371
+            # TODO: Instead of raising exceptions and exiting, log these errors.
             raise MSGException('MSG file is not a valid CFB')
         if self.MajorVersion == 3:
             self.SectorSize = 512
