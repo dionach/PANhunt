@@ -10,17 +10,16 @@ import argparse
 import hashlib
 import os
 import platform
-import re
 import sys
 import time
-from typing import Literal
+from typing import Optional
 
 import colorama
-import progressbar
 
 import panutils
 from config import PANHuntConfigSingleton
 from PANFile import PANFile
+from pbar import ProgressbarSingleton
 
 TEXT_FILE_SIZE_LIMIT: int = 1073741824  # 1Gb
 
@@ -36,213 +35,183 @@ app_version = '1.3'
 #
 ###################################################################################################################################
 
-# TODO: Move related functions to panutils
+class Hunter:
 
-def get_text_hash(text: str | bytes) -> str:
-    encoded_text: bytes
+    pbar = ProgressbarSingleton()
 
-    if isinstance(text, str):
-        encoded_text = text.encode('utf-8')
-    else:
-        encoded_text = text
+    def hunt_pans(self, conf: PANHuntConfigSingleton) -> tuple[int, int, list[PANFile]]:
 
-    return hashlib.sha512(encoded_text + 'PAN'.encode('utf-8')).hexdigest()
+        # global search_dir, excluded_directories, search_extensions
 
+        # find all files to check
+        all_files = self.__find_all_files_in_directory(
+            search_dir, conf.excluded_directories, conf.search_extensions)
 
-def add_hash_to_file(text_file: str) -> None:
+        # check each file
+        total_docs, doc_pans_found = self.__find_all_regexs_in_files([afile for afile in all_files if not afile.errors and afile.filetype in (
+            'TEXT', 'ZIP', 'SPECIAL')], conf.search_extensions, 'PAN')
+        # check each pst message and attachment
+        total_psts, pst_pans_found = self.__find_all_regexs_in_psts(
+            [pan_file for pan_file in all_files if not pan_file.errors and pan_file.filetype == 'MAIL'], conf.search_extensions, 'PAN')
 
-    text: str = panutils.read_unicode_file(text_file)
-    hash_check: str = get_text_hash(text)
+        total_files_searched: int = total_docs + total_psts
+        pans_found: int = doc_pans_found + pst_pans_found
 
-    text += os.linesep + hash_check
-    panutils.write_unicode_file(text_file, text)
+        return total_files_searched, pans_found, all_files
 
+    def output_report(self, conf: PANHuntConfigSingleton, all_files: list, total_files_searched: int, pans_found: int) -> None:
 
-def check_file_hash(text_file: str) -> None:
+        pan_sep: str = '\n\t'
+        pan_report: str = 'PAN Hunt Report - %s\n%s\n' % (
+            time.strftime("%H:%M:%S %d/%m/%Y"), '=' * 100)
+        pan_report += 'Searched %s\nExcluded %s\n' % (
+            conf.search_dir, ','.join(conf.excluded_directories))
+        pan_report += 'Command: %s\n' % (' '.join(sys.argv))
+        pan_report += 'Uname: %s\n' % (' | '.join(platform.uname()))
+        pan_report += 'Searched %s files. Found %s possible PANs.\n%s\n\n' % (
+            total_files_searched, pans_found, '=' * 100)
 
-    text_output: str = panutils.read_unicode_file(text_file)
-    hash_pos: int = text_output.rfind(os.linesep)
-    hash_in_file: str = text_output[hash_pos + len(os.linesep):]
-    hash_check: str = get_text_hash(text_output[:hash_pos])
-    if hash_in_file == hash_check:
-        print(colorama.Fore.GREEN + 'Hashes OK')
-    else:
-        print(colorama.Fore.RED + 'Hashes Not OK')
-    print(colorama.Fore.WHITE + hash_in_file + '\n' + hash_check)
+        for afile in sorted([afile for afile in all_files if afile.matches]):
+            pan_header: str = 'FOUND PANs: %s (%s %s)' % (
+                afile.path, afile.size_friendly(), afile.modified.strftime('%d/%m/%Y'))
+            print(colorama.Fore.RED + panutils.unicode2ascii(pan_header))
+            pan_report += pan_header + '\n'
+            pan_list: str = '\t' + \
+                pan_sep.join([pan.__repr__(conf.mask_pans)
+                              for pan in afile.matches])
+            print(colorama.Fore.YELLOW +
+                  panutils.unicode2ascii(pan_list))
+            pan_report += pan_list + '\n\n'
 
+        if len([afile for afile in all_files if afile.type == 'OTHER']) != 0:
+            pan_report += 'Interesting Files to check separately:\n'
+        for afile in sorted([afile for afile in all_files if afile.type == 'OTHER']):
+            pan_report += '%s (%s %s)\n' % (afile.path,
+                                            afile.size_friendly(), afile.modified.strftime('%d/%m/%Y'))
 
-def output_report(conf: PANHuntConfigSingleton, all_files: list, total_files_searched: int, pans_found: int) -> None:
+        pan_report = pan_report.replace('\n', os.linesep)
 
-    pan_sep: str = '\n\t'
-    pan_report: str = 'PAN Hunt Report - %s\n%s\n' % (
-        time.strftime("%H:%M:%S %d/%m/%Y"), '=' * 100)
-    pan_report += 'Searched %s\nExcluded %s\n' % (
-        conf.search_dir, ','.join(conf.excluded_directories))
-    pan_report += 'Command: %s\n' % (' '.join(sys.argv))
-    pan_report += 'Uname: %s\n' % (' | '.join(platform.uname()))
-    pan_report += 'Searched %s files. Found %s possible PANs.\n%s\n\n' % (
-        total_files_searched, pans_found, '=' * 100)
+        print(colorama.Fore.WHITE +
+              f'Report written to {panutils.unicode2ascii(conf.output_file)}')
+        panutils.write_unicode_file(conf.output_file, pan_report)
+        self.__add_hash_to_file(conf.output_file)
 
-    for afile in sorted([afile for afile in all_files if afile.matches]):
-        pan_header: str = 'FOUND PANs: %s (%s %s)' % (
-            afile.path, afile.size_friendly(), afile.modified.strftime('%d/%m/%Y'))
-        print(colorama.Fore.RED + panutils.unicode2ascii(pan_header))
-        pan_report += pan_header + '\n'
-        pan_list: str = '\t' + \
-            pan_sep.join([pan.__repr__(conf.mask_pans)
-                         for pan in afile.matches])
-        print(colorama.Fore.YELLOW +
-              panutils.unicode2ascii(pan_list))
-        pan_report += pan_list + '\n\n'
+    def check_file_hash(self, text_file: str) -> None:
 
-    if len([afile for afile in all_files if afile.type == 'OTHER']) != 0:
-        pan_report += 'Interesting Files to check separately:\n'
-    for afile in sorted([afile for afile in all_files if afile.type == 'OTHER']):
-        pan_report += '%s (%s %s)\n' % (afile.path,
-                                        afile.size_friendly(), afile.modified.strftime('%d/%m/%Y'))
-
-    pan_report = pan_report.replace('\n', os.linesep)
-
-    print(colorama.Fore.WHITE +
-          f'Report written to {panutils.unicode2ascii(conf.output_file)}')
-    panutils.write_unicode_file(conf.output_file, pan_report)
-    add_hash_to_file(conf.output_file)
-
-
-def hunt_pans(conf: PANHuntConfigSingleton, gauge_update_function=None) -> tuple[int, int, list[PANFile]]:
-
-    # global search_dir, excluded_directories, search_extensions
-
-    # find all files to check
-    all_files = find_all_files_in_directory(
-        search_dir, conf.excluded_directories, conf.search_extensions, gauge_update_function)
-
-    # check each file
-    total_docs, doc_pans_found = find_all_regexs_in_files([afile for afile in all_files if not afile.errors and afile.filetype in (
-        'TEXT', 'ZIP', 'SPECIAL')], conf.search_extensions, 'PAN', gauge_update_function)
-    # check each pst message and attachment
-    total_psts, pst_pans_found = find_all_regexs_in_psts(
-        [pan_file for pan_file in all_files if not pan_file.errors and pan_file.filetype == 'MAIL'], conf.search_extensions, 'PAN', gauge_update_function)
-
-    total_files_searched: int = total_docs + total_psts
-    pans_found: int = doc_pans_found + pst_pans_found
-
-    return total_files_searched, pans_found, all_files
-
-
-def find_all_files_in_directory(root_dir: str, excluded_directories: list[str], search_extensions: dict[str, list[str]], gauge_update_function=None) -> list[PANFile]:
-    """Recursively searches a directory for files. search_extensions is a dictionary of extension lists"""
-
-    all_extensions: list[str] = [ext for ext_list in list(
-        search_extensions.values()) for ext in ext_list]
-
-    extension_types: dict[str, str] = {}
-    for ext_type, ext_list in search_extensions.items():
-        for ext in ext_list:
-            extension_types[ext] = ext_type
-
-    if not gauge_update_function:
-        pbar_widgets = ['Doc Hunt: ', progressbar.Percentage(), ' ', progressbar.Bar(
-            marker=progressbar.RotatingMarker()), ' ', progressbar.ETA(), progressbar.FormatLabel(' Docs:0')]
-        pbar = progressbar.ProgressBar(widgets=pbar_widgets).start()
-    else:
-        gauge_update_function(caption='Doc Hunt: ')
-
-    doc_files: list[PANFile] = []
-    root_dir_dirs = None
-    root_items_completed = 0
-    docs_found = 0
-
-    root_total_items: int = 0
-    for root, sub_dirs, files in os.walk(root_dir):
-        sub_dirs[:] = [check_dir for check_dir in sub_dirs if os.path.join(
-            root, check_dir).lower() not in excluded_directories]
-        if not root_dir_dirs:
-            root_dir_dirs = [os.path.join(root, sub_dir)
-                             for sub_dir in sub_dirs]
-            root_total_items = len(root_dir_dirs) + len(files)
-        if root in root_dir_dirs:
-            root_items_completed += 1
-            if not gauge_update_function:
-                pbar_widgets[6] = progressbar.FormatLabel(
-                    ' Docs:%s' % docs_found)
-                pbar.update(root_items_completed * 100.0 / root_total_items)
-            else:
-                gauge_update_function(
-                    value=root_items_completed * 100.0 / root_total_items)
-        for filename in files:
-            if root == root_dir:
-                root_items_completed += 1
-            pan_file = PANFile(filename, root)
-            if pan_file.ext.lower() in all_extensions:
-                pan_file.set_file_stats()
-                pan_file.filetype = extension_types[pan_file.ext.lower()]
-                if pan_file.filetype in ('TEXT', 'SPECIAL') and pan_file.size > TEXT_FILE_SIZE_LIMIT:
-                    pan_file.filetype = 'OTHER'
-                    pan_file.set_error('File size {1} over limit of {0} for checking'.format(
-                        panutils.size_friendly(TEXT_FILE_SIZE_LIMIT), panutils.size_friendly(pan_file.size)))
-                doc_files.append(pan_file)
-                if not pan_file.errors:
-                    docs_found += 1
-                if not gauge_update_function:
-                    pbar_widgets[6] = progressbar.FormatLabel(
-                        ' Docs:%s' % docs_found)
-                    pbar.update(root_items_completed *
-                                100.0 / root_total_items)
-                else:
-                    gauge_update_function(
-                        value=root_items_completed * 100.0 / root_total_items)
-
-    if not gauge_update_function:
-        pbar.finish()
-
-    return doc_files
-
-
-def find_all_regexs_in_files(text_or_zip_files: list[PANFile], search_extensions: dict[str, list[str]], hunt_type: str, gauge_update_function=None) -> tuple[int, int]:
-    """ Searches files in doc_files list for regular expressions"""
-
-    if not gauge_update_function:
-        pbar_widgets = ['%s Hunt: ' % hunt_type, progressbar.Percentage(), ' ', progressbar.Bar(
-            marker=progressbar.RotatingMarker()), ' ', progressbar.ETA(), progressbar.FormatLabel(' %ss:0' % hunt_type)]
-        pbar = progressbar.ProgressBar(widgets=pbar_widgets).start()
-    else:
-        gauge_update_function(caption='%s Hunt: ' % hunt_type)
-
-    total_files = len(text_or_zip_files)
-    files_completed = 0
-    matches_found = 0
-
-    for pan_file in text_or_zip_files:
-        matches = pan_file.check_regexs(search_extensions)
-        matches_found += len(matches)
-        files_completed += 1
-        if not gauge_update_function:
-            pbar_widgets[6] = progressbar.FormatLabel(
-                ' %ss:%s' % (hunt_type, matches_found))
-            pbar.update(files_completed * 100.0 / total_files)
+        text_output: str = panutils.read_unicode_file(text_file)
+        hash_pos: int = text_output.rfind(os.linesep)
+        hash_in_file: str = text_output[hash_pos + len(os.linesep):]
+        hash_check: str = self.__get_text_hash(text_output[:hash_pos])
+        if hash_in_file == hash_check:
+            print(colorama.Fore.GREEN + 'Hashes OK')
         else:
-            gauge_update_function(value=files_completed * 100.0 / total_files)
+            print(colorama.Fore.RED + 'Hashes Not OK')
+        print(colorama.Fore.WHITE + hash_in_file + '\n' + hash_check)
 
-    if not gauge_update_function:
-        pbar.finish()
+    def __find_all_files_in_directory(self, root_dir: str, excluded_directories: list[str], search_extensions: dict[str, list[str]]) -> list[PANFile]:
+        """Recursively searches a directory for files. search_extensions is a dictionary of extension lists"""
 
-    return total_files, matches_found
+        all_extensions: list[str] = [ext for ext_list in list(
+            search_extensions.values()) for ext in ext_list]
 
+        extension_types: dict[str, str] = {}
+        for ext_type, ext_list in search_extensions.items():
+            for ext in ext_list:
+                extension_types[ext] = ext_type
 
-def find_all_regexs_in_psts(pst_files: list[PANFile], search_extensions: dict[str, list[str]], hunt_type: Literal['PAN', 'OTHER'], gauge_update_function=None) -> tuple[int, int]:
-    """ Searches psts in pst_files list for regular expressions in messages and attachments"""
+        self.pbar.create_progressbar('Doc')
 
-    total_psts: int = len(pst_files)
-    psts_completed = 0
-    matches_found = 0
+        doc_files: list[PANFile] = []
+        root_dir_dirs: Optional[list[str]] = None
+        root_items_completed = 0
+        docs_found = 0
 
-    for afile in pst_files:
-        matches = afile.check_pst_regexs(search_extensions, hunt_type, gauge_update_function)
-        matches_found += len(matches)
-        psts_completed += 1
+        root_total_items: int = 0
+        for root, sub_dirs, files in os.walk(root_dir):
+            sub_dirs = [check_dir for check_dir in sub_dirs if os.path.join(
+                root, check_dir).lower() not in excluded_directories]
+            if not root_dir_dirs:
+                root_dir_dirs = [os.path.join(root, sub_dir)
+                                 for sub_dir in sub_dirs]
+                root_total_items = len(root_dir_dirs) + len(files)
+            if root in root_dir_dirs:
+                root_items_completed += 1
+                self.pbar.update_progressbar(
+                    hunt_type='Doc', items_found=docs_found, items_total=root_total_items, items_completed=root_items_completed)
 
-    return total_psts, matches_found
+            for filename in files:
+                if root == root_dir:
+                    root_items_completed += 1
+                pan_file = PANFile(filename, root)
+                if pan_file.ext.lower() in all_extensions:
+                    pan_file.set_file_stats()
+                    pan_file.filetype = extension_types[pan_file.ext.lower()]
+                    if pan_file.filetype in ('TEXT', 'SPECIAL') and pan_file.size > TEXT_FILE_SIZE_LIMIT:
+                        pan_file.filetype = 'OTHER'
+                        pan_file.set_error('File size {1} over limit of {0} for checking'.format(
+                            panutils.size_friendly(TEXT_FILE_SIZE_LIMIT), panutils.size_friendly(pan_file.size)))
+                    doc_files.append(pan_file)
+                    if not pan_file.errors:
+                        docs_found += 1
+                    self.pbar.update_progressbar(
+                        hunt_type='Doc', items_found=docs_found, items_total=root_total_items, items_completed=root_items_completed)
+
+        self.pbar.finish()
+
+        return doc_files
+
+    def __find_all_regexs_in_files(self, text_or_zip_files: list[PANFile], search_extensions: dict[str, list[str]], hunt_type: str) -> tuple[int, int]:
+        """ Searches files in doc_files list for regular expressions"""
+
+        self.pbar.create_progressbar(hunt_type=hunt_type)
+
+        total_files = len(text_or_zip_files)
+        files_completed = 0
+        matches_found = 0
+
+        for pan_file in text_or_zip_files:
+            matches = pan_file.check_regexs(search_extensions)
+            matches_found += len(matches)
+            files_completed += 1
+            self.pbar.update_progressbar(
+                hunt_type=hunt_type, items_found=matches_found, items_total=total_files, items_completed=files_completed)
+
+        self.pbar.finish()
+
+        return total_files, matches_found
+
+    def __find_all_regexs_in_psts(self, pst_files: list[PANFile], search_extensions: dict[str, list[str]], hunt_type: str) -> tuple[int, int]:
+        """ Searches psts in pst_files list for regular expressions in messages and attachments"""
+
+        total_psts: int = len(pst_files)
+        psts_completed = 0
+        matches_found = 0
+
+        for pst_file in pst_files:
+            matches = pst_file.check_pst_regexs(
+                search_extensions, hunt_type)
+            matches_found += len(matches)
+            psts_completed += 1
+
+        return total_psts, matches_found
+
+    def __add_hash_to_file(self, text_file: str) -> None:
+
+        text: str = panutils.read_unicode_file(text_file)
+        hash_check: str = self.__get_text_hash(text)
+
+        text += os.linesep + hash_check
+        panutils.write_unicode_file(text_file, text)
+
+    def __get_text_hash(self, text: str | bytes) -> str:
+        encoded_text: bytes
+
+        if isinstance(text, str):
+            encoded_text = text.encode('utf-8')
+        else:
+            encoded_text = text
+
+        return hashlib.sha512(encoded_text + 'PAN'.encode('utf-8')).hexdigest()
 
 
 ###################################################################################################################################
@@ -253,7 +222,6 @@ def find_all_regexs_in_psts(pst_files: list[PANFile], search_extensions: dict[st
 # |_|  |_|\__,_|_|_| |_|
 #
 ###################################################################################################################################
-
 
 if __name__ == "__main__":
 
@@ -289,8 +257,9 @@ if __name__ == "__main__":
 
     args: argparse.Namespace = arg_parser.parse_args()
 
+    hunter = Hunter()
     if args.check_file_hash:
-        check_file_hash(args.check_file_hash)
+        hunter.check_file_hash(args.check_file_hash)
         sys.exit()
 
     search_dir = str(args.search)
@@ -320,7 +289,9 @@ if __name__ == "__main__":
                              other_extensions_string=other_extensions_string,
                              excluded_pans_string=excluded_pans_string)
 
-    total_files_searched, pans_found, all_files = hunt_pans(panhunt_config)
+    total_files_searched, pans_found, all_files = hunter.hunt_pans(
+        panhunt_config)
 
     # report findings
-    output_report(panhunt_config, all_files, total_files_searched, pans_found)
+    hunter.output_report(panhunt_config, all_files,
+                         total_files_searched, pans_found)

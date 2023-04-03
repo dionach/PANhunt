@@ -14,16 +14,14 @@ import os
 import string
 import struct
 import sys
-from calendar import c
 from enum import Enum
 from io import BufferedReader, BytesIO
-from typing import Any, Literal, Optional, Type, Union
-
-import progressbar
+from typing import Generator, Literal, Optional, Type, Union
 
 import panutils
 from CryptMethodEnum import CryptMethodEnum
 from exceptions import PSTException
+from pbar import SimpleSubbar
 from PTypeEnum import PTypeEnum
 
 _ValueType = Optional[Union[int, float, dt.datetime, bool, str,
@@ -896,8 +894,7 @@ class PType:
                 value_bytes)
             s: list[str] = []
             for i in range(ulCount):
-                s.append(value_bytes[rgulDataOffsets[i]
-                         :rgulDataOffsets[i + 1]].decode('utf-16-le'))
+                s.append(value_bytes[rgulDataOffsets[i]:rgulDataOffsets[i + 1]].decode('utf-16-le'))
             return s
         if self.ptype == PTypeEnum.PtypMultipleString8:
             ulCount, rgulDataOffsets = self.get_multi_value_offsets(
@@ -2304,7 +2301,7 @@ class PST:
         finally:
             pass
 
-    def export_all_attachments(self, path='', progressbar=None, total_attachments=0, overwrite=True) -> None:
+    def export_all_attachments(self, path='', overwrite=True) -> Generator[int, None, None]:
         """dumps all attachments in the PST to a path"""
 
         attachments_completed: int = 0
@@ -2326,11 +2323,9 @@ class PST:
                                 panutils.write_ascii_file(
                                     filepath, attachment.data, 'wb')
                             attachments_completed += 1
-                            if progressbar:
-                                progressbar.update(
-                                    attachments_completed * 100.0 / total_attachments)
+                            yield attachments_completed
 
-    def export_all_messages(self, path: str = '', progress_bar: Optional[progressbar.ProgressBar] = None, total_messages: int = 0) -> None:
+    def export_all_messages(self, path: str = '') -> Generator[int, None, None]:
 
         messages_completed: int = 0
         for folder in self.folder_generator():
@@ -2353,9 +2348,7 @@ class PST:
                 panutils.write_ascii_file(
                     filepath, panutils.unicode2ascii(msg_txt), 'w')
                 messages_completed += 1
-                if progress_bar:
-                    progress_bar.update(messages_completed *
-                                        100.0 / total_messages)
+                yield messages_completed
 
     def get_total_message_count(self) -> int:
 
@@ -2455,28 +2448,21 @@ def test_status_pst(pst_filepath) -> None:
     pst.close()
 
 
-def get_simple_progressbar(title) -> progressbar.ProgressBar:
-
-    pbar_widgets = [title, progressbar.Percentage(), ' ', progressbar.Bar(
-        marker=progressbar.RotatingMarker()), ' ', progressbar.ETA()]
-    return progressbar.ProgressBar(widgets=pbar_widgets).start()
-
-
 def test_dump_pst(pst_filepath, output_path) -> None:
     """ dump out all PST email attachments and emails (into text files) to output_path folder"""
 
     pst = PST(pst_filepath)
     print((pst.get_pst_status()))
 
-    pbar = get_simple_progressbar('Messages: ')
-    total_messages = pst.get_total_message_count()
-    pst.export_all_messages(output_path, pbar, total_messages)
-    pbar.finish()
+    with SimpleSubbar('Messages: ') as messages_bar:
+        total_messages: int = pst.get_total_message_count()
+        for i in pst.export_all_messages(output_path):
+            messages_bar.update(i * 100.0 / total_messages)
 
-    pbar = get_simple_progressbar('Attachments: ')
-    total_attachments = pst.get_total_attachment_count()
-    pst.export_all_attachments(output_path, pbar, total_attachments)
-    pbar.finish()
+    with SimpleSubbar('Attachments: ') as attachment_bar:
+        total_attachments: int = pst.get_total_attachment_count()
+        for i in pst.export_all_attachments(output_path):
+            attachment_bar.update(i * 100.0 / total_attachments)
 
     pst.close()
 

@@ -6,14 +6,12 @@ import zipfile
 from datetime import datetime
 from typing import Any, Optional
 
-import colorama
-import progressbar
-
 import msmsg
 import panutils
 import pst
 from config import PANHuntConfigSingleton
 from PAN import PAN
+from pbar import FileSubbar
 
 pan_regexs: dict[str, re.Pattern[str]] = {'Mastercard': re.compile(r'(?:\D|^)(5[1-5][0-9]{2}(?:\ |\-|)[0-9]{4}(?:\ |\-|)[0-9]{4}(?:\ |\-|)[0-9]{4})(?:\D|$)'),
                                           'Visa': re.compile(r'(?:\D|^)(4[0-9]{3}(?:\ |\-|)[0-9]{4}(?:\ |\-|)[0-9]{4}(?:\ |\-|)[0-9]{4})(?:\D|$)'),
@@ -23,14 +21,23 @@ pan_regexs: dict[str, re.Pattern[str]] = {'Mastercard': re.compile(r'(?:\D|^)(5[
 class PANFile:
     """ PANFile: class for a file that can check itself for PANs"""
 
+    filename: str
+    dir: str
+    path: str
+    root: str
+    ext: str
+    filetype: Optional[str]
+    errors: Optional[list]
+    matches: list[PAN]
+
     def __init__(self, filename, file_dir) -> None:
-        self.filename: str = filename
-        self.dir: str = file_dir
-        self.path: str = os.path.join(self.dir, self.filename)
+        self.filename = filename
+        self.dir = file_dir
+        self.path = os.path.join(self.dir, self.filename)
         self.root, self.ext = os.path.splitext(self.filename)
-        self.errors: list = []
-        self.filetype: Optional[str] = None
-        self.matches: list = []
+        self.errors = []
+        self.filetype = None
+        self.matches = []
 
         self.c = PANHuntConfigSingleton()
 
@@ -41,11 +48,11 @@ class PANFile:
     def set_file_stats(self) -> None:
 
         try:
-            stat = os.stat(self.path)
-            self.size = stat.st_size
-            self.accessed = self.dtm_from_ts(stat.st_atime)
-            self.modified = self.dtm_from_ts(stat.st_mtime)
-            self.created = self.dtm_from_ts(stat.st_ctime)
+            stat: os.stat_result = os.stat(self.path)
+            self.size: int = stat.st_size
+            self.accessed: Optional[datetime] = self.dtm_from_ts(stat.st_atime)
+            self.modified: Optional[datetime] = self.dtm_from_ts(stat.st_mtime)
+            self.created: Optional[datetime] = self.dtm_from_ts(stat.st_ctime)
         except WindowsError:
             self.size = -1
             self.set_error(sys.exc_info()[1])
@@ -64,10 +71,10 @@ class PANFile:
 
     # TODO: Use a general error logging and display mechanism
     def set_error(self, error_msg) -> None:
-
-        self.errors.append(error_msg)
-        print(colorama.Fore.RED + panutils.unicode2ascii('ERROR %s on %s' %
-              (error_msg, self.path)) + colorama.Fore.WHITE)
+        pass
+        # self.errors.append(error_msg)
+        # print(colorama.Fore.RED + panutils.unicode2ascii('ERROR %s on %s' %
+        #       (error_msg, self.path)) + colorama.Fore.WHITE)
 
     def check_regexs(self, search_extensions) -> Any:
         """Checks the file for matching regular expressions: if a ZIP then each file in the ZIP (recursively) or the text in a document"""
@@ -86,7 +93,7 @@ class PANFile:
 
         elif self.filetype == 'TEXT':
             try:
-                file_text = panutils.read_ascii_file(self.path, 'rb')
+                file_text: str = panutils.read_ascii_file(self.path, 'rb')
                 self.check_text_regexs(file_text, '')
             # except WindowsError:
             #    self.set_error(sys.exc_info()[1])
@@ -122,69 +129,53 @@ class PANFile:
                         self.matches.append(
                             PAN(self.path, sub_path, brand, pan))
 
-    def check_pst_regexs(self, search_extensions, hunt_type, gauge_update_function=None):
+    def check_pst_regexs(self, search_extensions, hunt_type):
         """ Searches a pst file for regular expressions in messages and attachments using regular expressions"""
 
-        all_extensions = search_extensions['TEXT'] + \
-            search_extensions['ZIP'] + search_extensions['SPECIAL']
+        with FileSubbar(hunt_type, self.filename) as sub_pbar:
 
-        if not gauge_update_function:
-            pbar_widgets = ['%s Hunt %s: ' % (hunt_type, panutils.unicode2ascii(self.filename)), progressbar.Percentage(), ' ', progressbar.Bar(
-                marker=progressbar.RotatingMarker()), ' ', progressbar.ETA(), progressbar.FormatLabel(' %ss:0' % hunt_type)]
-            pbar = progressbar.ProgressBar(widgets=pbar_widgets).start()
-        else:
-            gauge_update_function(caption='%s Hunt: ' % hunt_type)
+            try:
+                pst_file = pst.PST(self.path)
+                if pst_file.header.validPST:
 
-        try:
-            apst = pst.PST(self.path)
-            if apst.header.validPST:
+                    total_messages: int = pst_file.get_total_message_count()
+                    total_attachments: int = pst_file.get_total_attachment_count()
+                    total_items: int = total_messages + total_attachments
+                    items_completed = 0
 
-                total_messages: int = apst.get_total_message_count()
-                total_attachments: int = apst.get_total_attachment_count()
-                total_items: int = total_messages + total_attachments
-                items_completed = 0
+                    for folder in pst_file.folder_generator():
+                        for message in pst_file.message_generator(folder):
+                            if message.Subject:
+                                message_path: str = os.path.join(
+                                    folder.path, message.Subject)
+                            else:
+                                message_path = os.path.join(
+                                    folder.path, '[NoSubject]')
+                            if message.Body:
+                                self.check_text_regexs(
+                                    message.Body, message_path)
+                            if message.HasAttachments:
+                                for subattachment in message.subattachments:
+                                    if panutils.get_ext(subattachment.Filename) in search_extensions['TEXT'] + search_extensions['ZIP']:
+                                        attachment = message.get_attachment(
+                                            subattachment)
+                                        self.check_attachment_regexs(
+                                            attachment, search_extensions, message_path)
+                                    items_completed += 1
+                            items_completed += 1
+                            sub_pbar.update(items_found=len(
+                                self.matches), items_total=total_items, items_completed=items_completed)
 
-                for folder in apst.folder_generator():
-                    for message in apst.message_generator(folder):
-                        if message.Subject:
-                            message_path: str = os.path.join(
-                                folder.path, message.Subject)
-                        else:
-                            message_path = os.path.join(
-                                folder.path, '[NoSubject]')
-                        if message.Body:
-                            self.check_text_regexs(
-                                message.Body, message_path)
-                        if message.HasAttachments:
-                            for subattachment in message.subattachments:
-                                if panutils.get_ext(subattachment.Filename) in search_extensions['TEXT'] + search_extensions['ZIP']:
-                                    attachment = message.get_attachment(
-                                        subattachment)
-                                    self.check_attachment_regexs(
-                                        attachment, search_extensions, message_path)
-                                items_completed += 1
-                        items_completed += 1
-                        if not gauge_update_function:
-                            pbar_widgets[6] = progressbar.FormatLabel(
-                                ' %ss:%s' % (hunt_type, len(self.matches)))
-                            pbar.update(items_completed * 100.0 / total_items)
-                        else:
-                            gauge_update_function(
-                                value=items_completed * 100.0 / total_items)
+                pst_file.close()
 
-            apst.close()
-
-        except IOError:
-            self.set_error(sys.exc_info()[1])
-        except pst.PSTException:
-            self.set_error(sys.exc_info()[1])
-
-        if not gauge_update_function:
-            pbar.finish()
+            except IOError:
+                self.set_error(sys.exc_info()[1])
+            except pst.PSTException:
+                self.set_error(sys.exc_info()[1])
 
         return self.matches
 
-    def check_attachment_regexs(self, attachment, search_extensions, sub_path):
+    def check_attachment_regexs(self, attachment, search_extensions, sub_path) -> None:
         """for PST and MSG attachments, check attachment for valid extension and then regexs"""
 
         attachment_ext = panutils.get_ext(attachment.Filename)
