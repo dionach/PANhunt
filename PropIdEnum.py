@@ -89,3 +89,4 @@ class PropIdEnum(Enum):
     PidTagAttachMimeTag = 0x370E
     PidTagAttachExtension = 0x3703
     PidTagAttachLongFilename = 0x3707
+    PidTagXOriginatingIp = 0x8028  # Non-standard

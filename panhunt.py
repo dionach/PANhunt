@@ -7,28 +7,28 @@
 # By BB
 
 import argparse
-import configparser
 import hashlib
 import os
 import platform
 import re
 import sys
 import time
+from typing import Literal
 
 import colorama
 import progressbar
-from PANFile import PANFile
-from config import PANHuntConfigSingleton
 
 import panutils
+from config import PANHuntConfigSingleton
+from PANFile import PANFile
 
 TEXT_FILE_SIZE_LIMIT: int = 1073741824  # 1Gb
 
 app_version = '1.3'
 
-pan_regexs = {'Mastercard': re.compile(r'(?:\D|^)(5[1-5][0-9]{2}(?:\ |\-|)[0-9]{4}(?:\ |\-|)[0-9]{4}(?:\ |\-|)[0-9]{4})(?:\D|$)'),
-              'Visa': re.compile(r'(?:\D|^)(4[0-9]{3}(?:\ |\-|)[0-9]{4}(?:\ |\-|)[0-9]{4}(?:\ |\-|)[0-9]{4})(?:\D|$)'),
-              'AMEX': re.compile(r'(?:\D|^)((?:34|37)[0-9]{2}(?:\ |\-|)[0-9]{6}(?:\ |\-|)[0-9]{5})(?:\D|$)')}
+pan_regexs: dict[str, re.Pattern[str]] = {'Mastercard': re.compile(r'(?:\D|^)(5[1-5][0-9]{2}(?:\ |\-|)[0-9]{4}(?:\ |\-|)[0-9]{4}(?:\ |\-|)[0-9]{4})(?:\D|$)'),
+                                          'Visa': re.compile(r'(?:\D|^)(4[0-9]{3}(?:\ |\-|)[0-9]{4}(?:\ |\-|)[0-9]{4}(?:\ |\-|)[0-9]{4})(?:\D|$)'),
+                                          'AMEX': re.compile(r'(?:\D|^)((?:34|37)[0-9]{2}(?:\ |\-|)[0-9]{6}(?:\ |\-|)[0-9]{5})(?:\D|$)')}
 
 
 ###################################################################################################################################
@@ -113,20 +113,20 @@ def output_report(conf: PANHuntConfigSingleton, all_files: list, total_files_sea
     add_hash_to_file(conf.output_file)
 
 
-def hunt_pans(conf: PANHuntConfigSingleton, gauge_update_function=None):
+def hunt_pans(conf: PANHuntConfigSingleton, gauge_update_function=None) -> tuple[int, int, list[PANFile]]:
 
     # global search_dir, excluded_directories, search_extensions
 
     # find all files to check
     all_files = find_all_files_in_directory(
-        PANFile, search_dir, conf.excluded_directories, conf.search_extensions, gauge_update_function)
+        search_dir, conf.excluded_directories, conf.search_extensions, gauge_update_function)
 
     # check each file
-    total_docs, doc_pans_found = find_all_regexs_in_files([afile for afile in all_files if not afile.errors and afile.type in (
+    total_docs, doc_pans_found = find_all_regexs_in_files([afile for afile in all_files if not afile.errors and afile.filetype in (
         'TEXT', 'ZIP', 'SPECIAL')], pan_regexs, conf.search_extensions, 'PAN', gauge_update_function)
     # check each pst message and attachment
     total_psts, pst_pans_found = find_all_regexs_in_psts(
-        [afile for afile in all_files if not afile.errors and afile.type == 'MAIL'], pan_regexs, conf.search_extensions, 'PAN', gauge_update_function)
+        [pan_file for pan_file in all_files if not pan_file.errors and pan_file.filetype == 'MAIL'], pan_regexs, conf.search_extensions, 'PAN', gauge_update_function)
 
     total_files_searched: int = total_docs + total_psts
     pans_found: int = doc_pans_found + pst_pans_found
@@ -134,13 +134,13 @@ def hunt_pans(conf: PANHuntConfigSingleton, gauge_update_function=None):
     return total_files_searched, pans_found, all_files
 
 
-def find_all_files_in_directory(AFileClass, root_dir, excluded_directories, search_extensions, gauge_update_function=None):
+def find_all_files_in_directory(root_dir: str, excluded_directories: list[str], search_extensions: dict[str, list[str]], gauge_update_function=None) -> list[PANFile]:
     """Recursively searches a directory for files. search_extensions is a dictionary of extension lists"""
 
-    all_extensions = [ext for ext_list in list(
+    all_extensions: list[str] = [ext for ext_list in list(
         search_extensions.values()) for ext in ext_list]
 
-    extension_types = {}
+    extension_types: dict[str, str] = {}
     for ext_type, ext_list in search_extensions.items():
         for ext in ext_list:
             extension_types[ext] = ext_type
@@ -152,18 +152,19 @@ def find_all_files_in_directory(AFileClass, root_dir, excluded_directories, sear
     else:
         gauge_update_function(caption='Doc Hunt: ')
 
-    doc_files = []
+    doc_files: list[PANFile] = []
     root_dir_dirs = None
     root_items_completed = 0
     docs_found = 0
 
+    root_total_items: int = 0
     for root, sub_dirs, files in os.walk(root_dir):
         sub_dirs[:] = [check_dir for check_dir in sub_dirs if os.path.join(
             root, check_dir).lower() not in excluded_directories]
         if not root_dir_dirs:
             root_dir_dirs = [os.path.join(root, sub_dir)
                              for sub_dir in sub_dirs]
-            root_total_items: int = len(root_dir_dirs) + len(files)
+            root_total_items = len(root_dir_dirs) + len(files)
         if root in root_dir_dirs:
             root_items_completed += 1
             if not gauge_update_function:
@@ -176,16 +177,16 @@ def find_all_files_in_directory(AFileClass, root_dir, excluded_directories, sear
         for filename in files:
             if root == root_dir:
                 root_items_completed += 1
-            afile = AFileClass(filename, root)  # AFile or PANFile
-            if afile.ext.lower() in all_extensions:
-                afile.set_file_stats()
-                afile.type = extension_types[afile.ext.lower()]
-                if afile.type in ('TEXT', 'SPECIAL') and afile.size > TEXT_FILE_SIZE_LIMIT:
-                    afile.type = 'OTHER'
-                    afile.set_error('File size {1} over limit of {0} for checking'.format(
-                        panutils.size_friendly(TEXT_FILE_SIZE_LIMIT), afile.size_friendly()))
-                doc_files.append(afile)
-                if not afile.errors:
+            pan_file = PANFile(filename, root)
+            if pan_file.ext.lower() in all_extensions:
+                pan_file.set_file_stats()
+                pan_file.filetype = extension_types[pan_file.ext.lower()]
+                if pan_file.filetype in ('TEXT', 'SPECIAL') and pan_file.size > TEXT_FILE_SIZE_LIMIT:
+                    pan_file.filetype = 'OTHER'
+                    pan_file.set_error('File size {1} over limit of {0} for checking'.format(
+                        panutils.size_friendly(TEXT_FILE_SIZE_LIMIT), panutils.size_friendly(pan_file.size)))
+                doc_files.append(pan_file)
+                if not pan_file.errors:
                     docs_found += 1
                 if not gauge_update_function:
                     pbar_widgets[6] = progressbar.FormatLabel(
@@ -202,7 +203,7 @@ def find_all_files_in_directory(AFileClass, root_dir, excluded_directories, sear
     return doc_files
 
 
-def find_all_regexs_in_files(text_or_zip_files, regexs, search_extensions, hunt_type, gauge_update_function=None) -> tuple[int, int]:
+def find_all_regexs_in_files(text_or_zip_files: list[PANFile], regexs: dict[str, re.Pattern[str]], search_extensions: dict[str, list[str]], hunt_type: str, gauge_update_function=None) -> tuple[int, int]:
     """ Searches files in doc_files list for regular expressions"""
 
     if not gauge_update_function:
@@ -233,7 +234,7 @@ def find_all_regexs_in_files(text_or_zip_files, regexs, search_extensions, hunt_
     return total_files, matches_found
 
 
-def find_all_regexs_in_psts(pst_files, regexs, search_extensions, hunt_type, gauge_update_function=None) -> tuple[int, int]:
+def find_all_regexs_in_psts(pst_files: list[PANFile], regexs: dict[str, re.Pattern[str]], search_extensions: dict[str, list[str]], hunt_type: Literal['PAN', 'OTHER'], gauge_update_function=None) -> tuple[int, int]:
     """ Searches psts in pst_files list for regular expressions in messages and attachments"""
 
     total_psts: int = len(pst_files)

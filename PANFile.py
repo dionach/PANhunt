@@ -25,7 +25,7 @@ class PANFile:
         self.path: str = os.path.join(self.dir, self.filename)
         self.root, self.ext = os.path.splitext(self.filename)
         self.errors: list = []
-        self.type = None
+        self.filetype: Optional[str] = None
         self.matches: list = []
 
         self.c = PANHuntConfigSingleton()
@@ -68,7 +68,7 @@ class PANFile:
     def check_regexs(self, regexs, search_extensions) -> Any:
         """Checks the file for matching regular expressions: if a ZIP then each file in the ZIP (recursively) or the text in a document"""
 
-        if self.type == 'ZIP':
+        if self.filetype == 'ZIP':
             try:
                 if zipfile.is_zipfile(self.path):
                     zf = zipfile.ZipFile(self.path)
@@ -80,7 +80,7 @@ class PANFile:
             except Exception:
                 self.set_error(sys.exc_info()[1])
 
-        elif self.type == 'TEXT':
+        elif self.filetype == 'TEXT':
             try:
                 file_text = panutils.read_ascii_file(self.path, 'rb')
                 self.check_text_regexs(file_text, regexs, '')
@@ -91,7 +91,7 @@ class PANFile:
             except Exception:
                 self.set_error(sys.exc_info()[1])
 
-        elif self.type == 'SPECIAL':
+        elif self.filetype == 'SPECIAL':
             if panutils.get_ext(self.path) == '.msg':
                 try:
                     msg = msmsg.MSMSG(self.path)
