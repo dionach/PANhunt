@@ -8,14 +8,11 @@ from typing import Any, Optional
 
 import msmsg
 import panutils
+from patterns import CardPatternSingleton
 import pst
 from config import PANHuntConfigSingleton
 from PAN import PAN
 from pbar import FileSubbar
-
-pan_regexs: dict[str, re.Pattern[str]] = {'Mastercard': re.compile(r'(?:\D|^)(5[1-5][0-9]{2}(?:\ |\-|)[0-9]{4}(?:\ |\-|)[0-9]{4}(?:\ |\-|)[0-9]{4})(?:\D|$)'),
-                                          'Visa': re.compile(r'(?:\D|^)(4[0-9]{3}(?:\ |\-|)[0-9]{4}(?:\ |\-|)[0-9]{4}(?:\ |\-|)[0-9]{4})(?:\D|$)'),
-                                          'AMEX': re.compile(r'(?:\D|^)((?:34|37)[0-9]{2}(?:\ |\-|)[0-9]{6}(?:\ |\-|)[0-9]{5})(?:\D|$)')}
 
 
 class PANFile:
@@ -122,7 +119,7 @@ class PANFile:
     def check_text_regexs(self, text: str, sub_path: str) -> None:
         """Uses regular expressions to check for PANs in text"""
 
-        for brand, regex in list(pan_regexs.items()):
+        for brand, regex in CardPatternSingleton.instance.brands():
             pans = regex.findall(text)
             if pans:
                 for pan in pans:
