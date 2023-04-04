@@ -37,14 +37,14 @@ app_version = '1.3'
 
 class Hunter:
 
-    pbar = ProgressbarSingleton()
+    pbar: ProgressbarSingleton = ProgressbarSingleton().instance
 
     def hunt_pans(self, conf: PANHuntConfigSingleton) -> tuple[int, int, list[PANFile]]:
 
         # global search_dir, excluded_directories, search_extensions
 
         # find all files to check
-        all_files = self.__find_all_files_in_directory(
+        all_files: list[PANFile] = self.__find_all_files_in_directory(
             conf.search_dir, conf.excluded_directories, conf.search_extensions)
 
         # check each file
@@ -59,7 +59,7 @@ class Hunter:
 
         return total_files_searched, pans_found, all_files
 
-    def output_report(self, conf: PANHuntConfigSingleton, all_files: list, total_files_searched: int, pans_found: int) -> None:
+    def output_report(self, conf: PANHuntConfigSingleton, all_files: list[PANFile], total_files_searched: int, pans_found: int) -> None:
 
         pan_sep: str = '\n\t'
         pan_report: str = 'PAN Hunt Report - %s\n%s\n' % (
@@ -71,9 +71,9 @@ class Hunter:
         pan_report += 'Searched %s files. Found %s possible PANs.\n%s\n\n' % (
             total_files_searched, pans_found, '=' * 100)
 
-        for pan_file in sorted([afile for afile in all_files if afile.matches]):
+        for pan_file in sorted([pan_file for pan_file in all_files if pan_file.matches], key=lambda x: x.filename):
             pan_header: str = 'FOUND PANs: %s (%s %s)' % (
-                pan_file.path, pan_file.size_friendly(), pan_file.modified.strftime('%d/%m/%Y'))
+                pan_file.path, panutils.size_friendly(pan_file.size), pan_file.modified.strftime('%d/%m/%Y'))
             print(colorama.Fore.RED + panutils.unicode2ascii(pan_header))
             pan_report += pan_header + '\n'
             pan_list: str = '\t' + \
@@ -83,11 +83,11 @@ class Hunter:
                   panutils.unicode2ascii(pan_list))
             pan_report += pan_list + '\n\n'
 
-        if len([pan_file for pan_file in all_files if pan_file.type == 'OTHER']) != 0:
+        if len([pan_file for pan_file in all_files if pan_file.filetype == 'OTHER']) != 0:
             pan_report += 'Interesting Files to check separately:\n'
-        for pan_file in sorted([afile for afile in all_files if afile.type == 'OTHER']):
+        for pan_file in sorted([afile for afile in all_files if afile.filetype == 'OTHER'], key=lambda x: x.filename):
             pan_report += '%s (%s %s)\n' % (pan_file.path,
-                                            pan_file.size_friendly(), pan_file.modified.strftime('%d/%m/%Y'))
+                                            panutils.size_friendly(pan_file.size), pan_file.modified.strftime('%d/%m/%Y'))
 
         pan_report = pan_report.replace('\n', os.linesep)
 
@@ -275,7 +275,7 @@ def main() -> None:
     config_file = str(args.config)
 
     # First, read the hardcoded default values.
-    panhunt_config: PANHuntConfigSingleton = PANHuntConfigSingleton.instance
+    panhunt_config: PANHuntConfigSingleton = PANHuntConfigSingleton().instance
 
     # Second, read the config file
     panhunt_config = panhunt_config.from_file(
