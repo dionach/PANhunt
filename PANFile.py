@@ -36,8 +36,6 @@ class PANFile:
         self.filetype = None
         self.matches = []
 
-        self.c = PANHuntConfigSingleton()
-
     def __cmp__(self, other: 'PANFile') -> bool:
 
         return self.path.lower() == other.path.lower()
@@ -91,7 +89,7 @@ class PANFile:
 
         elif self.filetype == 'TEXT':
             try:
-                file_text: str = panutils.read_ascii_file(self.path, 'rb')
+                file_text: str = panutils.read_ascii_file(self.path)
                 self.check_text_regexs(file_text, '')
             # except WindowsError:
             #    self.set_error(sys.exc_info()[1])
@@ -119,11 +117,11 @@ class PANFile:
     def check_text_regexs(self, text: str, sub_path: str) -> None:
         """Uses regular expressions to check for PANs in text"""
 
-        for brand, regex in CardPatternSingleton.instance.brands():
-            pans = regex.findall(text)
+        for brand, regex in CardPatternSingleton().instance.brands():
+            pans: list[str] = regex.findall(text)
             if pans:
                 for pan in pans:
-                    if PAN.is_valid_luhn_checksum(pan) and not panutils.is_excluded(pan, self.c.excluded_pans):
+                    if PAN.is_valid_luhn_checksum(pan) and not PAN.is_excluded(pan):
                         self.matches.append(
                             PAN(self.path, sub_path, brand, pan))
 

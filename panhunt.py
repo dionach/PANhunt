@@ -38,34 +38,35 @@ app_version = '1.3'
 class Hunter:
 
     pbar: ProgressbarSingleton = ProgressbarSingleton().instance
+    conf: PANHuntConfigSingleton = PANHuntConfigSingleton().instance
 
-    def hunt_pans(self, conf: PANHuntConfigSingleton) -> tuple[int, int, list[PANFile]]:
+    def hunt_pans(self) -> tuple[int, int, list[PANFile]]:
 
         # global search_dir, excluded_directories, search_extensions
 
         # find all files to check
         all_files: list[PANFile] = self.__find_all_files_in_directory(
-            conf.search_dir, conf.excluded_directories, conf.search_extensions)
+            self.conf.search_dir, self.conf.excluded_directories, self.conf.search_extensions)
 
         # check each file
         total_docs, doc_pans_found = self.__find_all_regexs_in_files([pan_file for pan_file in all_files if not pan_file.errors and pan_file.filetype in (
-            'TEXT', 'ZIP', 'SPECIAL')], conf.search_extensions, 'PAN')
+            'TEXT', 'ZIP', 'SPECIAL')], self.conf.search_extensions, 'PAN')
         # check each pst message and attachment
         total_psts, pst_pans_found = self.__find_all_regexs_in_psts(
-            [pan_file for pan_file in all_files if not pan_file.errors and pan_file.filetype == 'MAIL'], conf.search_extensions, 'PAN')
+            [pan_file for pan_file in all_files if not pan_file.errors and pan_file.filetype == 'MAIL'], self.conf.search_extensions, 'PAN')
 
         total_files_searched: int = total_docs + total_psts
         pans_found: int = doc_pans_found + pst_pans_found
 
         return total_files_searched, pans_found, all_files
 
-    def output_report(self, conf: PANHuntConfigSingleton, all_files: list[PANFile], total_files_searched: int, pans_found: int) -> None:
+    def output_report(self, all_files: list[PANFile], total_files_searched: int, pans_found: int) -> None:
 
         pan_sep: str = '\n\t'
         pan_report: str = 'PAN Hunt Report - %s\n%s\n' % (
             time.strftime("%H:%M:%S %d/%m/%Y"), '=' * 100)
         pan_report += 'Searched %s\nExcluded %s\n' % (
-            conf.search_dir, ','.join(conf.excluded_directories))
+            self.conf.search_dir, ','.join(self.conf.excluded_directories))
         pan_report += 'Command: %s\n' % (' '.join(sys.argv))
         pan_report += 'Uname: %s\n' % (' | '.join(platform.uname()))
         pan_report += 'Searched %s files. Found %s possible PANs.\n%s\n\n' % (
@@ -77,7 +78,7 @@ class Hunter:
             print(colorama.Fore.RED + panutils.unicode2ascii(pan_header))
             pan_report += pan_header + '\n'
             pan_list: str = '\t' + \
-                pan_sep.join([pan.__repr__(conf.mask_pans)
+                pan_sep.join([pan.__repr__(self.conf.mask_pans)
                               for pan in pan_file.matches])
             print(colorama.Fore.YELLOW +
                   panutils.unicode2ascii(pan_list))
@@ -92,9 +93,9 @@ class Hunter:
         pan_report = pan_report.replace('\n', os.linesep)
 
         print(colorama.Fore.WHITE +
-              f'Report written to {panutils.unicode2ascii(conf.output_file)}')
-        panutils.write_unicode_file(conf.output_file, pan_report)
-        self.__add_hash_to_file(conf.output_file)
+              f'Report written to {panutils.unicode2ascii(self.conf.output_file)}')
+        panutils.write_unicode_file(self.conf.output_file, pan_report)
+        self.__add_hash_to_file(self.conf.output_file)
 
     def check_file_hash(self, text_file: str) -> None:
 
@@ -293,11 +294,10 @@ def main() -> None:
                                               other_extensions_string=other_extensions_string,
                                               excluded_pans_string=excluded_pans_string).instance
 
-    total_files_searched, pans_found, all_files = hunter.hunt_pans(
-        panhunt_config)
+    total_files_searched, pans_found, all_files = hunter.hunt_pans()
 
     # report findings
-    hunter.output_report(panhunt_config, all_files,
+    hunter.output_report(all_files,
                          total_files_searched, pans_found)
 
 
