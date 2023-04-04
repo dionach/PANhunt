@@ -50,24 +50,25 @@ class PANFile:
         try:
             stat: os.stat_result = os.stat(self.path)
             self.size: int = stat.st_size
-            self.accessed: Optional[datetime] = self.dtm_from_ts(stat.st_atime)
-            self.modified: Optional[datetime] = self.dtm_from_ts(stat.st_mtime)
-            self.created: Optional[datetime] = self.dtm_from_ts(stat.st_ctime)
+            self.accessed: datetime = self.dtm_from_ts(stat.st_atime)
+            self.modified: datetime = self.dtm_from_ts(stat.st_mtime)
+            self.created: datetime = self.dtm_from_ts(stat.st_ctime)
         except WindowsError:
             self.size = -1
             self.set_error(sys.exc_info()[1])
 
-    def dtm_from_ts(self, ts) -> Optional[datetime]:
+    def dtm_from_ts(self, ts) -> datetime:
 
         try:
             return datetime.fromtimestamp(ts)
-        except ValueError:
+        except ValueError as ve:
             if ts == -753549904:
                 # Mac OSX "while copying" thing
                 return datetime(1946, 2, 14, 8, 34, 56)
+            else:
+                raise Exception() from ve
 
-            self.set_error(sys.exc_info()[1])
-        return None
+            # self.set_error(sys.exc_info()[1])
 
     # TODO: Use a general error logging and display mechanism
     def set_error(self, error_msg) -> None:
