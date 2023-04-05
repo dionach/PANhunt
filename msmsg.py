@@ -45,11 +45,14 @@ class FAT:
     ENDOFCHAIN = 0xFFFFFFFE
     FREESECT = 0xFFFFFFFF
 
+    mscfb: 'MSCFB'
+    entries: list[bytes]
+
     def __init__(self, mscfb: 'MSCFB') -> None:
 
-        self.mscfb: MSCFB = mscfb  # Microsoft Compound File Binary File
+        self.mscfb = mscfb  # Microsoft Compound File Binary File
         difat_index: int = 0
-        self.entries: list[bytes] = []
+        self.entries = []
         while mscfb.DIFAT[difat_index] != FAT.FREESECT:
             sector = mscfb.DIFAT[difat_index]
             sector_bytes: bytes = mscfb.get_sector_bytes(sector)
@@ -145,11 +148,11 @@ class Directory:
     def set_entry_children(self, dir_entry: 'DirectoryEntry') -> None:
 
         dir_entry.children = {}
-        child_ids_queue = []
+        child_ids_queue: list[int] = []
         if dir_entry.ChildID != DirectoryEntry.NOSTREAM:
             child_ids_queue.append(dir_entry.ChildID)
             while child_ids_queue:
-                child_entry = self.entries[child_ids_queue.pop()]
+                child_entry: DirectoryEntry = self.entries[child_ids_queue.pop()]
                 if child_entry.Name in list(dir_entry.children.keys()):
                     raise MSGException(
                         'Directory Entry Name already in children dictionary')

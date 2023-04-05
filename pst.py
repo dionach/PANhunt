@@ -2322,7 +2322,7 @@ class PST:
 
         self.fd.close()
 
-    def folder_generator(self):
+    def folder_generator(self) -> Generator[Folder, None, None]:
 
         root_folder: Folder = self.messaging.get_folder(
             self.messaging.root_entryid, '')
@@ -2344,7 +2344,7 @@ class PST:
             except PSTException as e:
                 log_error(e)
 
-    def message_generator(self, folder):
+    def message_generator(self, folder: Folder) -> Generator[Message, None, None]:
 
         try:
             for submessage in folder.submessages:
@@ -2359,7 +2359,7 @@ class PST:
         finally:
             pass
 
-    def export_all_attachments(self, path='', overwrite=True) -> Generator[int, None, None]:
+    def export_all_attachments(self, path: str = '', overwrite: bool = True) -> Generator[int, None, None]:
         """dumps all attachments in the PST to a path"""
 
         attachments_completed: int = 0
@@ -2432,7 +2432,7 @@ class PST:
         return status
 
     @staticmethod
-    def bruteforce(charset, maxlength: int):
+    def bruteforce(charset, maxlength: int) -> Generator[str, None, None]:
 
         return (''.join(candidate) for candidate in itertools.chain.from_iterable(itertools.product(charset, repeat=i) for i in range(1, maxlength + 1)))
 
@@ -2480,12 +2480,12 @@ def get_unused_filename(filepath: str) -> str:
     return filepath
 
 
-def log_error(e) -> None:
+def log_error(e: BaseException) -> None:
     # TODO: Use a general error logging and display mechanism
     # global error_log_list
     # error_log_list.append(e.message)
     # Implement a logging solution
-    sys.stderr.write(e.message + '\n')
+    sys.stderr.write(str(e) + '\n')
 
 
 ###############################################################################################################################
@@ -2499,7 +2499,7 @@ def log_error(e) -> None:
 ###############################################################################################################################
 
 
-def test_status_pst(pst_filepath) -> None:
+def test_status_pst(pst_filepath: str) -> None:
 
     pst = PST(pst_filepath)
     print((panutils.unicode_to_ascii(pst.get_pst_status())))
@@ -2508,7 +2508,7 @@ def test_status_pst(pst_filepath) -> None:
     pst.close()
 
 
-def test_dump_pst(pst_filepath, output_path) -> None:
+def test_dump_pst(pst_filepath: str, output_path: str) -> None:
     """ dump out all PST email attachments and emails (into text files) to output_path folder"""
 
     pst = PST(pst_filepath)
@@ -2527,7 +2527,7 @@ def test_dump_pst(pst_filepath, output_path) -> None:
     pst.close()
 
 
-def test_folder_psts(psts_folder) -> None:
+def test_folder_psts(psts_folder: str) -> None:
 
     # global error_log_list
 
