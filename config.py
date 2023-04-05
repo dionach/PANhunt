@@ -86,12 +86,15 @@ class PANHuntConfigSingleton:
                                                  zip_extensions_string, special_extensions_string, mail_extensions_string, other_extensions_string, excluded_pans_string)
 
     @staticmethod
-    def from_file(config_file: Optional[str]) -> None:
+    def from_file(config_file: str) -> None:
         """If a config file provided and it has specific values, they overwrite the previous values
 
         Args:
             config_file (Optional[str]): Path to config file in INI format
         """
+
+        if not os.path.isfile(config_file):
+            raise ValueError("Invalid configuration file.")
 
         config_from_file: dict = PANHuntConfigSingleton.parse_file(config_file)
 
@@ -121,12 +124,6 @@ class PANHuntConfigSingleton:
 
     @staticmethod
     def parse_file(config_file):
-        if config_file is None:
-            raise ValueError("Configuration file value cannut be null.")
-
-        if not os.path.isfile(config_file):
-            raise ValueError("Invalid configuration file.")
-
         config: configparser.ConfigParser = configparser.ConfigParser()
         config.read(config_file)
         config_from_file: dict = {}

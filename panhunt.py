@@ -292,10 +292,11 @@ def main() -> None:
     excluded_pans_string = str(args.exclude_pan)
     config_file = str(args.config)
 
-    # First, initiate the singleton the hardcoded default values.
-    # Second, read the config file
-    PANHuntConfigSingleton.instance().from_file(
-        config_file=config_file)
+    # The singleton is initiated at the first call with the hardcoded default values.
+    # If exists, read the config file
+    if config_file != 'None':
+        PANHuntConfigSingleton.instance().from_file(
+            config_file=config_file)
 
     # Finally, read the CLI parameters as they override the default and config file values
     PANHuntConfigSingleton.instance().from_args(search_dir=search_dir,
