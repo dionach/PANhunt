@@ -1,7 +1,5 @@
-import codecs
 import datetime as dt
 import os
-import pickle
 import re
 import struct
 import unicodedata
@@ -61,13 +59,13 @@ def size_friendly(size: int) -> str:
     return f"{(size / (1024 * 1024 * 1024))}GB"
 
 
-def datetime_from_filetime(timestamp: int) -> dt.datetime:
+def filetime_to_datetime(timestamp: int) -> dt.datetime:
     # timestamp: a 64-bit integer representing the number of 100-nanosecond intervals since January 1, 1601
     return dt.datetime(1601, 1, 1, tzinfo=dt.timezone.utc) + dt.timedelta(microseconds=timestamp // 10)
 
 
-def datetime_from_filetime_bytes(timestamp: bytes) -> dt.datetime:
-    return datetime_from_filetime(int.from_bytes(timestamp, 'little'))
+def filetime_bytes_to_datetime(timestamp: bytes) -> dt.datetime:
+    return filetime_to_datetime(int.from_bytes(timestamp, 'little'))
 
 # TODO: Write a typed wrapper for struct.unpack with ENUM for format: https://docs.python.org/3/library/struct.html#format-characters
 
@@ -86,25 +84,29 @@ def unpack_float(format: str, buffer: bytes) -> float:
         raise ArgumentError(format, buffer)
 
 
-def to_binary(value: _ValueType) -> bytes:
+def as_binary(value: _ValueType) -> bytes:
     if isinstance(value, bytes):
         return value
-    raise TypeError()
+    raise TypeError(
+        f'Expected type "bytes" got "{type(value)}". \nValue: {value!r}')
 
 
-def to_str(value: _ValueType) -> str:
+def as_str(value: _ValueType) -> str:
     if isinstance(value, str):
         return value
-    raise TypeError()
+    raise TypeError(
+        f'Expected type "str" got "{type(value)}". \nValue: {value!r}')
 
 
-def to_int(value: _ValueType) -> int:
+def as_int(value: _ValueType) -> int:
     if isinstance(value, int):
         return value
-    raise TypeError()
+    raise TypeError(
+        f'Expected type "int" got "{type(value)}". \nValue: {value!r}')
 
 
-def to_datetime(value: _ValueType) -> dt.datetime:
+def as_datetime(value: _ValueType) -> dt.datetime:
     if isinstance(value, dt.datetime):
         return value
-    raise TypeError()
+    raise TypeError(
+        f'Expected type "datetime" got "{type(value)}". \nValue: {value!r}')
