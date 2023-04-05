@@ -3,14 +3,13 @@ import os
 import sys
 import zipfile
 from datetime import datetime
-from typing import Optional
+from typing import Generator, Optional
 
 import msmsg
 import panutils
 import pst
 from PAN import PAN
 from patterns import CardPatternSingleton
-from pbar import FileSubbar
 
 
 class PANFile:
@@ -134,54 +133,51 @@ class PANFile:
                         self.matches.append(
                             PAN(self.path, sub_path, brand, pan))
 
-    def check_pst_regexs(self, hunt_type: str, excluded_pans_list: list[str], search_extensions: dict[str, list[str]]) -> list[PAN]:
+    def check_pst_regexs(self, excluded_pans_list: list[str], search_extensions: dict[str, list[str]]) -> Generator[tuple[int, int], None, None]:
         """ Searches a pst file for regular expressions in messages and attachments using regular expressions"""
         # TODO: Move UI related code to main method of panhunt.py
-        with FileSubbar(hunt_type, self.filename) as sub_pbar:
 
-            try:
-                pst_file = pst.PST(self.path)
-                if pst_file.header.validPST:
+        try:
+            pst_file = pst.PST(self.path)
+            if pst_file.header.validPST:
 
-                    total_messages: int = pst_file.get_total_message_count()
-                    total_attachments: int = pst_file.get_total_attachment_count()
-                    total_items: int = total_messages + total_attachments
-                    items_completed = 0
+                total_messages: int = pst_file.get_total_message_count()
+                total_attachments: int = pst_file.get_total_attachment_count()
+                total_items: int = total_messages + total_attachments
+                items_completed = 0
 
-                    for folder in pst_file.folder_generator():
-                        for message in pst_file.message_generator(folder):
-                            if message.Subject:
-                                message_path: str = os.path.join(
-                                    folder.path, message.Subject)
-                            else:
-                                message_path = os.path.join(
-                                    folder.path, '[NoSubject]')
-                            if message.Body:
-                                self.check_text_regexs(
-                                    message.Body, message_path, excluded_pans_list)
-                            if message.HasAttachments:
-                                for subattachment in message.subattachments:
-                                    if panutils.get_ext(subattachment.Filename) in search_extensions['TEXT'] + search_extensions['ZIP']:
-                                        attachment: pst.Attachment = message.get_attachment(
-                                            subattachment)  # type: ignore
-                                        # We already checked there is an attachment, this is to suppress type checkers
-                                        self.check_attachment_regexs(attachment=attachment,
-                                                                     sub_path=message_path,
-                                                                     excluded_pans_list=excluded_pans_list,
-                                                                     search_extensions=search_extensions)
-                                    items_completed += 1
-                            items_completed += 1
-                            sub_pbar.update(items_found=len(
-                                self.matches), items_total=total_items, items_completed=items_completed)
+                for folder in pst_file.folder_generator():
+                    for message in pst_file.message_generator(folder):
+                        if message.Subject:
+                            message_path: str = os.path.join(
+                                folder.path, message.Subject)
+                        else:
+                            message_path = os.path.join(
+                                folder.path, '[NoSubject]')
+                        if message.Body:
+                            self.check_text_regexs(
+                                message.Body, message_path, excluded_pans_list)
+                        if message.HasAttachments:
+                            for subattachment in message.subattachments:
+                                if panutils.get_ext(subattachment.Filename) in search_extensions['TEXT'] + search_extensions['ZIP']:
+                                    attachment: pst.Attachment = message.get_attachment(
+                                        subattachment)  # type: ignore
+                                    # We already checked there is an attachment, this is to suppress type checkers
+                                    self.check_attachment_regexs(attachment=attachment,
+                                                                 sub_path=message_path,
+                                                                 excluded_pans_list=excluded_pans_list,
+                                                                 search_extensions=search_extensions)
+                                items_completed += 1
+                                yield items_completed, total_items
+                        items_completed += 1
+                        yield items_completed, total_items
 
-                pst_file.close()
+            pst_file.close()
 
-            except IOError:
-                self.set_error(sys.exc_info()[1])
-            except pst.PSTException:
-                self.set_error(sys.exc_info()[1])
-
-        return self.matches
+        except IOError:
+            self.set_error(sys.exc_info()[1])
+        except pst.PSTException:
+            self.set_error(sys.exc_info()[1])
 
     def check_attachment_regexs(self, attachment: pst.Attachment | msmsg.Attachment, sub_path: str, excluded_pans_list: list[str], search_extensions: dict[str, list[str]]) -> None:
         """for PST and MSG attachments, check attachment for valid extension and then regexs"""

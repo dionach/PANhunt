@@ -21,7 +21,6 @@ from typing import Generator, Literal, Optional, Type, Union
 import panutils
 from CryptMethodEnum import CryptMethodEnum
 from exceptions import PSTException
-from pbar import SimpleSubbar
 from PTypeEnum import PTypeEnum
 
 _ValueType = Optional[Union[int, float, dt.datetime, bool, str,
@@ -2499,60 +2498,60 @@ def log_error(e: BaseException) -> None:
 ###############################################################################################################################
 
 
-def test_status_pst(pst_filepath: str) -> None:
+# def test_status_pst(pst_filepath: str) -> None:
 
-    pst = PST(pst_filepath)
-    print((panutils.unicode_to_ascii(pst.get_pst_status())))
-    print(('Total Messages: %s' % pst.get_total_message_count()))
-    print(('Total Attachments: %s' % pst.get_total_attachment_count()))
-    pst.close()
-
-
-def test_dump_pst(pst_filepath: str, output_path: str) -> None:
-    """ dump out all PST email attachments and emails (into text files) to output_path folder"""
-
-    pst = PST(pst_filepath)
-    print((pst.get_pst_status()))
-
-    with SimpleSubbar('Messages: ') as messages_bar:
-        total_messages: int = pst.get_total_message_count()
-        for i in pst.export_all_messages(output_path):
-            messages_bar.update(i * 100.0 / total_messages)
-
-    with SimpleSubbar('Attachments: ') as attachment_bar:
-        total_attachments: int = pst.get_total_attachment_count()
-        for i in pst.export_all_attachments(output_path):
-            attachment_bar.update(i * 100.0 / total_attachments)
-
-    pst.close()
+#     pst = PST(pst_filepath)
+#     print((panutils.unicode_to_ascii(pst.get_pst_status())))
+#     print(('Total Messages: %s' % pst.get_total_message_count()))
+#     print(('Total Attachments: %s' % pst.get_total_attachment_count()))
+#     pst.close()
 
 
-def test_folder_psts(psts_folder: str) -> None:
+# def test_dump_pst(pst_filepath: str, output_path: str) -> None:
+#     """ dump out all PST email attachments and emails (into text files) to output_path folder"""
 
-    # global error_log_list
+#     pst = PST(pst_filepath)
+#     print((pst.get_pst_status()))
 
-    s: str = ''
-    for pst_filepath in [os.path.join(psts_folder, filename) for filename in os.listdir(psts_folder) if os.path.isfile(os.path.join(psts_folder, filename)) and os.path.splitext(filename.lower())[1] == '.pst']:
-        try:
-            s += 'Opening %s\n' % pst_filepath
-            # error_log_list = []
-            pst = PST(pst_filepath)
-            status: str = panutils.unicode_to_ascii(pst.get_pst_status())
-            print(status)
-            password: str = ''
-            if pst.messaging.PasswordCRC32Hash:
-                password = pst.crack_password(pst.messaging.PasswordCRC32Hash)
-                if password:
-                    password = ' (%s)' % password
-            s += status + password + '\n'
-            pst.close()
-            # s += '\n'.join(error_log_list)
-            s += '\n\n\n'
-        except Exception as e:
-            s += 'ERROR: %s\n' % e
+#     with SimpleSubbar('Messages: ') as messages_bar:
+#         total_messages: int = pst.get_total_message_count()
+#         for i in pst.export_all_messages(output_path):
+#             messages_bar.update(i * 100.0 / total_messages)
 
-    with open(os.path.join(psts_folder, 'psts_test.txt'), 'w', encoding='ascii') as f:
-        f.write(s)
+#     with SimpleSubbar('Attachments: ') as attachment_bar:
+#         total_attachments: int = pst.get_total_attachment_count()
+#         for i in pst.export_all_attachments(output_path):
+#             attachment_bar.update(i * 100.0 / total_attachments)
+
+#     pst.close()
+
+
+# def test_folder_psts(psts_folder: str) -> None:
+
+#     # global error_log_list
+
+#     s: str = ''
+#     for pst_filepath in [os.path.join(psts_folder, filename) for filename in os.listdir(psts_folder) if os.path.isfile(os.path.join(psts_folder, filename)) and os.path.splitext(filename.lower())[1] == '.pst']:
+#         try:
+#             s += 'Opening %s\n' % pst_filepath
+#             # error_log_list = []
+#             pst = PST(pst_filepath)
+#             status: str = panutils.unicode_to_ascii(pst.get_pst_status())
+#             print(status)
+#             password: str = ''
+#             if pst.messaging.PasswordCRC32Hash:
+#                 password = pst.crack_password(pst.messaging.PasswordCRC32Hash)
+#                 if password:
+#                     password = ' (%s)' % password
+#             s += status + password + '\n'
+#             pst.close()
+#             # s += '\n'.join(error_log_list)
+#             s += '\n\n\n'
+#         except Exception as e:
+#             s += 'ERROR: %s\n' % e
+
+#     with open(os.path.join(psts_folder, 'psts_test.txt'), 'w', encoding='ascii') as f:
+#         f.write(s)
 
 
 ###################################################################################################################################

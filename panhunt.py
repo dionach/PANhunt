@@ -19,7 +19,7 @@ import colorama
 import panutils
 from config import PANHuntConfigSingleton
 from PANFile import PANFile
-from pbar import ProgressbarSingleton
+from pbar import FileProgressbar, MainProgressbar
 
 TEXT_FILE_SIZE_LIMIT: int = 1073741824  # 1Gb
 
@@ -37,7 +37,7 @@ app_version = '1.3'
 
 class Hunter:
 
-    pbar: ProgressbarSingleton = ProgressbarSingleton().instance
+    pbar: MainProgressbar
 
     def hunt_pans(self) -> tuple[int, int, list[PANFile]]:
 
@@ -123,6 +123,8 @@ class Hunter:
             for ext in ext_list:
                 extension_types[ext] = ext_type
 
+        self.pbar = MainProgressbar()
+        # TODO: move progressbarr update methods here
         self.pbar.create('Doc')
 
         doc_files: list[PANFile] = []
@@ -174,6 +176,7 @@ class Hunter:
     def __find_all_regexs_in_files(self, text_or_zip_files: list[PANFile], hunt_type: str) -> tuple[int, int]:
         """ Searches files in doc_files list for regular expressions"""
 
+        # TODO: Create a separate FileProgressbar here
         self.pbar.create(hunt_type=hunt_type)
 
         total_files: int = len(text_or_zip_files)
@@ -199,14 +202,17 @@ class Hunter:
         psts_completed = 0
         matches_found = 0
 
-        for pst_file in pst_files:
-            matches: list = pst_file.check_pst_regexs(
-                hunt_type=hunt_type,
-                excluded_pans_list=PANHuntConfigSingleton.instance().excluded_pans,
-                search_extensions=PANHuntConfigSingleton.instance().search_extensions)
-            matches_found += len(matches)
-            psts_completed += 1
+        for file in pst_files:
 
+            with FileProgressbar(hunt_type, file.filename) as sub_pbar:
+                for completed, total_items in file.check_pst_regexs(
+                        excluded_pans_list=PANHuntConfigSingleton.instance().excluded_pans,
+                        search_extensions=PANHuntConfigSingleton.instance().search_extensions):
+
+                    sub_pbar.update(items_found=len(file.matches),
+                                    items_total=total_items, items_completed=completed)
+                matches_found += len(file.matches)
+                psts_completed += 1
         return total_psts, matches_found
 
     def __append_hash(self, text_file: str) -> None:

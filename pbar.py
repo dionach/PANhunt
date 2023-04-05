@@ -3,14 +3,9 @@ import progressbar
 import panutils
 
 
-class ProgressbarSingleton:
+class MainProgressbar:
 
     pbar: progressbar.ProgressBar
-
-    def __new__(cls) -> 'ProgressbarSingleton':
-        if not hasattr(cls, 'instance'):
-            cls.instance = super(ProgressbarSingleton, cls).__new__(cls)
-        return cls.instance
 
     def create(self, hunt_type: str) -> None:
         pbar_widgets: list = ['%s Hunt: ' % hunt_type, progressbar.Percentage(), ' ', progressbar.Bar(
@@ -26,7 +21,7 @@ class ProgressbarSingleton:
         self.pbar.finish()
 
 
-class SimpleSubbar:
+class SimpleProgressbar:
 
     pbar: progressbar.ProgressBar
     title: str
@@ -35,7 +30,7 @@ class SimpleSubbar:
         self.title = title
         self.__create__()
 
-    def __enter__(self) -> 'SimpleSubbar':
+    def __enter__(self) -> 'SimpleProgressbar':
         self.__create__()
         return self
 
@@ -57,7 +52,7 @@ class SimpleSubbar:
         self.finish()
 
 
-class FileSubbar:
+class FileProgressbar:
 
     pbar: progressbar.ProgressBar
     filename: str
@@ -68,7 +63,7 @@ class FileSubbar:
         self.filename = filename
         self.__create__()
 
-    def __enter__(self) -> 'FileSubbar':
+    def __enter__(self) -> 'FileProgressbar':
         self.__create__()
         return self
 
