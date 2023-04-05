@@ -46,31 +46,6 @@ def to_zeropaddedhex(value, fixed_length: int) -> str:
     return f"{value:0{fixed_length}x}"
 
 
-def to_hex(value: bytes) -> str:
-    return value.hex()
-
-
-def load_binary_object(filename: str) -> Any:
-
-    with open(filename, 'rb') as pkl_file:
-        obj = pickle.load(pkl_file)
-    return obj
-
-
-def save_binary_object(filename: str, obj) -> None:
-
-    with open(filename, 'wb') as pkl_file:
-        pickle.dump(obj, pkl_file, -1)
-
-
-# def write_csv(filename: str, dlines) -> None:
-
-#     with open(filename, "w", encoding='ascii') as f:
-#         for d in dlines:
-#             s: str = ','.join(['"%s"' % str(i).replace('"', "'") for i in d])
-#             f.write('%s\n' % s)
-
-
 def decode_zip_filename(filename: str | bytes) -> Any:
 
     if isinstance(filename, str):
@@ -88,7 +63,7 @@ def decode_zip_text(instr: str | bytes) -> str:
         raise ValueError()
 
 
-def get_ext(file_name:str) -> str:
+def get_ext(file_name: str) -> str:
 
     return os.path.splitext(file_name)[1].lower()
 

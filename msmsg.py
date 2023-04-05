@@ -75,7 +75,7 @@ class FAT:
 
     def __str__(self) -> str:
 
-        return ', '.join([f"{hex(sector)}:{panutils.to_hex(entry)}" for sector, entry in zip(list(range(len(self.entries))), self.entries)])
+        return ', '.join([f"{hex(sector)}:{entry.hex()}" for sector, entry in zip(list(range(len(self.entries))), self.entries)])
 
 
 class MiniFAT:
@@ -490,6 +490,7 @@ class PropertyEntry:
 
     def __str__(self) -> str:
         return f"{hex(self.PropertyTag)}-{str(self.value)}"
+
 
 class Recipient:
     RecipientType: int
