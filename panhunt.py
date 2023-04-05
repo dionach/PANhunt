@@ -45,15 +45,14 @@ class Hunter:
         # global search_dir, excluded_directories, search_extensions
 
         # find all files to check
-        all_files: list[PANFile] = self.__find_all_files_in_directory(
-            self.conf.search_dir, self.conf.excluded_directories, self.conf.search_extensions)
+        all_files: list[PANFile] = self.__find_all_files_in_search_directory()
 
         # check each file
         total_docs, doc_pans_found = self.__find_all_regexs_in_files([pan_file for pan_file in all_files if not pan_file.errors and pan_file.filetype in (
-            'TEXT', 'ZIP', 'SPECIAL')], self.conf.search_extensions, 'PAN')
+            'TEXT', 'ZIP', 'SPECIAL')], 'PAN')
         # check each pst message and attachment
         total_psts, pst_pans_found = self.__find_all_regexs_in_psts(
-            [pan_file for pan_file in all_files if not pan_file.errors and pan_file.filetype == 'MAIL'], self.conf.search_extensions, 'PAN')
+            [pan_file for pan_file in all_files if not pan_file.errors and pan_file.filetype == 'MAIL'], 'PAN')
 
         total_files_searched: int = total_docs + total_psts
         pans_found: int = doc_pans_found + pst_pans_found
@@ -109,14 +108,14 @@ class Hunter:
             print(colorama.Fore.RED + 'Hashes Not OK')
         print(colorama.Fore.WHITE + hash_in_file + '\n' + hash_check)
 
-    def __find_all_files_in_directory(self, root_dir: str, excluded_directories: list[str], search_extensions: dict[str, list[str]]) -> list[PANFile]:
+    def __find_all_files_in_search_directory(self) -> list[PANFile]:
         """Recursively searches a directory for files. search_extensions is a dictionary of extension lists"""
 
         all_extensions: list[str] = [ext for ext_list in list(
-            search_extensions.values()) for ext in ext_list]
+            PANHuntConfigSingleton().instance.search_extensions.values()) for ext in ext_list]
 
         extension_types: dict[str, str] = {}
-        for ext_type, ext_list in search_extensions.items():
+        for ext_type, ext_list in PANHuntConfigSingleton().instance.search_extensions.items():
             for ext in ext_list:
                 extension_types[ext] = ext_type
 
@@ -128,9 +127,9 @@ class Hunter:
         docs_found = 0
 
         root_total_items: int = 0
-        for root, sub_dirs, files in os.walk(root_dir):
-            sub_dirs = [check_dir for check_dir in sub_dirs if os.path.join(
-                root, check_dir).lower() not in excluded_directories]
+        for root, sub_ds, files in os.walk(PANHuntConfigSingleton().instance.search_dir):
+            sub_dirs: list[str] = [check_dir for check_dir in sub_ds if os.path.join(
+                root, check_dir).lower() not in PANHuntConfigSingleton().instance.excluded_directories]
             if not root_dir_dirs:
                 root_dir_dirs = [os.path.join(root, sub_dir)
                                  for sub_dir in sub_dirs]
@@ -141,7 +140,7 @@ class Hunter:
                     hunt_type='Doc', items_found=docs_found, items_total=root_total_items, items_completed=root_items_completed)
 
             for filename in files:
-                if root == root_dir:
+                if root == PANHuntConfigSingleton().instance.search_dir:
                     root_items_completed += 1
                 pan_file = PANFile(filename, root)
                 if pan_file.ext.lower() in all_extensions:
@@ -161,7 +160,7 @@ class Hunter:
 
         return doc_files
 
-    def __find_all_regexs_in_files(self, text_or_zip_files: list[PANFile], search_extensions: dict[str, list[str]], hunt_type: str) -> tuple[int, int]:
+    def __find_all_regexs_in_files(self, text_or_zip_files: list[PANFile], hunt_type: str) -> tuple[int, int]:
         """ Searches files in doc_files list for regular expressions"""
 
         self.pbar.create(hunt_type=hunt_type)
@@ -171,7 +170,7 @@ class Hunter:
         matches_found = 0
 
         for pan_file in text_or_zip_files:
-            matches = pan_file.check_regexs(search_extensions)
+            matches = pan_file.check_regexs()
             matches_found += len(matches)
             files_completed += 1
             self.pbar.update(
@@ -181,7 +180,7 @@ class Hunter:
 
         return total_files, matches_found
 
-    def __find_all_regexs_in_psts(self, pst_files: list[PANFile], search_extensions: dict[str, list[str]], hunt_type: str) -> tuple[int, int]:
+    def __find_all_regexs_in_psts(self, pst_files: list[PANFile], hunt_type: str) -> tuple[int, int]:
         """ Searches psts in pst_files list for regular expressions in messages and attachments"""
 
         total_psts: int = len(pst_files)
@@ -189,8 +188,7 @@ class Hunter:
         matches_found = 0
 
         for pst_file in pst_files:
-            matches = pst_file.check_pst_regexs(
-                search_extensions, hunt_type)
+            matches = pst_file.check_pst_regexs(hunt_type)
             matches_found += len(matches)
             psts_completed += 1
 

@@ -50,25 +50,25 @@ def to_hex(value: bytes) -> str:
     return value.hex()
 
 
-def load_object(filename: str) -> Any:
+def load_binary_object(filename: str) -> Any:
 
     with open(filename, 'rb') as pkl_file:
         obj = pickle.load(pkl_file)
     return obj
 
 
-def save_object(filename: str, obj) -> None:
+def save_binary_object(filename: str, obj) -> None:
 
     with open(filename, 'wb') as pkl_file:
         pickle.dump(obj, pkl_file, -1)
 
 
-def write_csv(filename: str, dlines) -> None:
+# def write_csv(filename: str, dlines) -> None:
 
-    with open(filename, "w", encoding='ascii') as f:
-        for d in dlines:
-            s: str = ','.join(['"%s"' % str(i).replace('"', "'") for i in d])
-            f.write('%s\n' % s)
+#     with open(filename, "w", encoding='ascii') as f:
+#         for d in dlines:
+#             s: str = ','.join(['"%s"' % str(i).replace('"', "'") for i in d])
+#             f.write('%s\n' % s)
 
 
 def decode_zip_filename(filename: str | bytes) -> Any:
@@ -78,7 +78,17 @@ def decode_zip_filename(filename: str | bytes) -> Any:
     return filename.decode('cp437')
 
 
-def get_ext(file_name) -> Any:
+def decode_zip_text(instr: str | bytes) -> str:
+
+    if isinstance(instr, str):
+        return instr
+    elif isinstance(instr, bytes):
+        return instr.decode('utf-8')
+    else:
+        raise ValueError()
+
+
+def get_ext(file_name:str) -> str:
 
     return os.path.splitext(file_name)[1].lower()
 

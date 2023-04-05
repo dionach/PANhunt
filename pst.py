@@ -14,7 +14,7 @@ import os
 import string
 import struct
 import sys
-from enum import Enum
+from enum import Enum, Flag
 from io import BufferedReader, BytesIO
 from typing import Generator, Literal, Optional, Type, Union
 
@@ -422,9 +422,10 @@ class Block:
             self.btype = 0
             self.cLevel = 0
             if bCryptMethod == CryptMethodEnum.NDB_CRYPT_PERMUTE:  # NDB_CRYPT_PERMUTE
+                io = BytesIO(Block.decrypt_table)
                 self.data_block = value_bytes[:data_size].translate(
-                    BytesIO(Block.decrypt_table).read())
-            if bCryptMethod == CryptMethodEnum.Unencoded:
+                    io.read())
+            elif bCryptMethod == CryptMethodEnum.Unencoded:
                 self.data_block = value_bytes[:data_size]  # data block
             else:
                 raise RuntimeError("Unsupported encryption method.")
@@ -777,7 +778,7 @@ class BTH:
 
 
 class PCBTHData:
-    wPropId: 'PropIdEnum'
+    wPropId: Optional['PropIdEnum']
     wPropType: int
     dwValueHnid: bytes
     value: _ValueType
@@ -786,7 +787,11 @@ class PCBTHData:
 
     def __init__(self, bth_data: BTHData, hn: HN) -> None:
 
-        self.wPropId = PropIdEnum(panutils.unpack_integer('H', bth_data.key))
+        i: int = panutils.unpack_integer('H', bth_data.key)
+        try:
+            self.wPropId = PropIdEnum(i)
+        except:
+            self.wPropId = None
         wPropType: int
         dwValueHnid: bytes
         wPropType, dwValueHnid = struct.unpack('H4s', bth_data.data)
@@ -894,7 +899,7 @@ class PType:
                 value_bytes)
             s: list[str] = []
             for i in range(ulCount):
-                s.append(value_bytes[rgulDataOffsets[i]:rgulDataOffsets[i + 1]].decode('utf-16-le'))
+                s.append(value_bytes[rgulDataOffsets[i]                         :rgulDataOffsets[i + 1]].decode('utf-16-le'))
             return s
         if self.ptype == PTypeEnum.PtypMultipleString8:
             ulCount, rgulDataOffsets = self.get_multi_value_offsets(
@@ -1050,6 +1055,7 @@ class PropIdEnum(Enum):
     PidTagAttachMimeTag = 0x370E
     PidTagAttachExtension = 0x3703
     PidTagAttachLongFilename = 0x3707
+    PidTagXOriginatingIP = 0x8028  # Non-standard X-Originating-IP
 
 
 class PC:  # Property Context
@@ -1522,7 +1528,7 @@ class SubAttachment:
     AttachmentSize: int
     AttachFilename: str
     AttachLongFilename: Optional[str]
-    Filename: Optional[str]
+    Filename: str
 
     def __init__(self, nid: NID, AttachmentSize: int, AttachFilename: str, AttachLongFilename: Optional[str]) -> None:
 
@@ -1636,7 +1642,7 @@ class Message:
         self.DisplayTo = panutils.to_str(
             self.pc.getval(PropIdEnum.PidTagDisplayToW).value)
         self.XOriginatingIP = panutils.to_str(self.pc.getval(
-            PropIdEnum(0x8028)).value)  # x-originating-ip
+            PropIdEnum.PidTagXOriginatingIP).value)  # x-originating-ip
 
         self.tc_attachments = None
         self.tc_recipients = None
@@ -1690,6 +1696,20 @@ class Message:
 
 class Attachment:
 
+    ltp: LTP
+    slentry:SLENTRY
+    pc:PC
+
+    DisplayName:str
+    AttachMethod:int
+    AttachmentSize:int
+    AttachFilename:str
+    AttachLongFilename:str
+    Filename:str
+    BinaryData: bytes
+    AttachMimeTag:str
+    AttachExtension:str
+
     def __init__(self, ltp: LTP, slentry: SLENTRY) -> None:
 
         self.ltp = ltp
@@ -1698,8 +1718,10 @@ class Attachment:
 
         self.DisplayName = panutils.to_str(
             self.pc.getval(PropIdEnum.PidTagDisplayName).value)
-        self.AttachMethod = self.pc.getval(PropIdEnum.PidTagAttachMethod)
-        self.AttachmentSize = self.pc.getval(PropIdEnum.PidTagAttachmentSize)
+        self.AttachMethod = panutils.to_int(
+            self.pc.getval(PropIdEnum.PidTagAttachMethod).value)
+        self.AttachmentSize = panutils.to_int(
+            self.pc.getval(PropIdEnum.PidTagAttachmentSize).value)
         self.AttachFilename = panutils.to_str(self.pc.getval(
             PropIdEnum.PidTagAttachFilename).value)  # 8.3 short name
         self.AttachLongFilename = panutils.to_str(self.pc.getval(
@@ -1714,14 +1736,16 @@ class Attachment:
             self.Filename = '[NoFilename_Method%s]' % self.AttachMethod
 
         if self.AttachMethod == Message.afByValue:
-            self.data = panutils.to_binary(self.pc.getval(
+            self.BinaryData = panutils.to_binary(self.pc.getval(
                 PropIdEnum.PidTagAttachDataBinary).value)
         else:
-            self.data = panutils.to_binary(self.pc.getval(
+            self.BinaryData = panutils.to_binary(self.pc.getval(
                 PropIdEnum.PidTagAttachDataObject).value)
             # raise PSTException('Unsupported Attachment Method %s' % self.AttachMethod)
-        self.AttachMimeTag = self.pc.getval(PropIdEnum.PidTagAttachMimeTag)
-        self.AttachExtension = self.pc.getval(PropIdEnum.PidTagAttachExtension)
+        self.AttachMimeTag = panutils.to_str(
+            self.pc.getval(PropIdEnum.PidTagAttachMimeTag).value)
+        self.AttachExtension = panutils.to_str(
+            self.pc.getval(PropIdEnum.PidTagAttachExtension).value)
 
     def get_all_properties(self) -> str:
 
@@ -1765,6 +1789,7 @@ class Messaging:
     ltp: LTP
     message_store: PC
     store_record_key: bytes
+    root_entryid: EntryID
 
     def __init__(self, ltp: LTP) -> None:
 
@@ -1783,11 +1808,11 @@ class Messaging:
 
         if PropIdEnum.PidTagPstPassword in self.message_store.properties.keys():
             self.PasswordCRC32Hash = struct.unpack('I', struct.pack(
-                'i', panutils.to_str(self.message_store.getval(PropIdEnum.PidTagPstPassword).value)))[0]
+                'i', panutils.to_int(self.message_store.getval(PropIdEnum.PidTagPstPassword).value)))[0]
         else:
             self.PasswordCRC32Hash = None
-        self.root_entryid: bytes = panutils.to_binary(self.message_store.getval(
-            PropIdEnum.PidTagIpmSubTreeEntryId).value)
+        self.root_entryid = EntryID(panutils.to_binary(self.message_store.getval(
+            PropIdEnum.PidTagIpmSubTreeEntryId).value))
         self.deleted_items_entryid: bytes = panutils.to_binary(self.message_store.getval(
             PropIdEnum.PidTagIpmWastebasketEntryId).value)
 
@@ -1827,7 +1852,7 @@ class Messaging:
                         nameid.guid = nameid_guidstream[16 *
                                                         (nameid.wGuid - 3):16 * (nameid.wGuid - 2)]
 
-    def get_folder(self, entryid, parent_path='') -> Folder:
+    def get_folder(self, entryid: EntryID, parent_path: str = '') -> Folder:
 
         return Folder(entryid.nid, self.ltp, parent_path, self)
 
@@ -2144,7 +2169,7 @@ class CRC:
         return dwCRC
 
 
-class FieldSize(Enum):
+class FieldSize(Flag):
     BYTE = 1
     WORD = 2
     DWORD = 4
@@ -2153,18 +2178,49 @@ class FieldSize(Enum):
 
 class Header:
     bCryptMethod: CryptMethodEnum
+    wVer: int
+    wVerClient: int
+    bPlatformCreate: int
+    bPlatformAccess: int
+    is_ansi: bool
+    is_unicode: bool
+    validPST: bool
+    dwMagic: bytes
+    dwUnique: bytes
+    dwCRCPartial: bytes
+    wMagicClient: bytes
+    dwReserved1: bytes
+    dwReserved2: bytes
+    bidNextB: BID
+    bidNextP: BID
+
+    # Unused
+    qwUnused: bytes
+    rgbFM: bytes
+    rgbFP: bytes
+    rgbReserved: bytes
+    rgbReserved2: bytes
+    rgbReserved3: bytes
+    ullReserved: bytes
+    bReserved: bytes
+    dwReserved: bytes
+    dwCRCFull: bytes
 
     def __init__(self, fd: BufferedReader) -> None:
 
         # common ansi/unicode fields
         fd.seek(0)
-        self.dwMagic: bytes = fd.read(FieldSize.DWORD.value)
-        self.dwCRCPartial: bytes = fd.read(FieldSize.DWORD.value)  # ignore
-        self.wMagicClient: bytes = fd.read(FieldSize.WORD.value)
+        self.dwMagic = fd.read(FieldSize.DWORD.value)
+        self.dwCRCPartial = fd.read(FieldSize.DWORD.value)  # ignore
+        self.wMagicClient = fd.read(FieldSize.WORD.value)
 
         try:
-            self.wVer, self.wVerClient, self.bPlatformCreate, self.bPlatformAccess = struct.unpack(
+            wVer, wVerClient, bPlatformCreate, bPlatformAccess = struct.unpack(
                 'HHBB', fd.read(FieldSize.WORD.value + FieldSize.WORD.value + FieldSize.BYTE.value + FieldSize.BYTE.value))
+            self.wVer = int(wVer)
+            self.wVerClient = int(wVerClient)
+            self.bPlatformCreate = int(bPlatformCreate)
+            self.bPlatformAccess = int(bPlatformAccess)
         except struct.error:
             self.validPST = False
             return
@@ -2191,8 +2247,9 @@ class Header:
             self.root = Root(fd.read(40), True)
             self.rgbFM = fd.read(128)  # unused
             self.rgbFP = fd.read(128)  # unused
-            self.bSentinel, self.bCryptMethod = struct.unpack(
+            self.bSentinel, cryptMethod = struct.unpack(
                 'BB', fd.read(FieldSize.BYTE.value + FieldSize.BYTE.value))
+            self.bCryptMethod = CryptMethodEnum(int(cryptMethod))
             self.rgbReserved = fd.read(FieldSize.WORD.value)  # unused
             self.ullReserved = fd.read(8)  # unused
             self.dwReserved = fd.read(FieldSize.DWORD.value)  # unused
@@ -2207,13 +2264,14 @@ class Header:
             self.dwUnique = fd.read(FieldSize.DWORD.value)  # ignore
             self.rgnid = struct.unpack(
                 'IIIIIIIIIIIIIIIIIIIIIIIIIIIIIIII', fd.read(128))
-            self.qwUnused = fd.read(FieldSize.ANSIDWORD.value)  # unused
+            self.qwUnused: bytes = fd.read(FieldSize.ANSIDWORD.value)  # unused
             self.root = Root(fd.read(72), False)
-            self.dwAlign = fd.read(FieldSize.DWORD.value)  # unused
+            self.dwAlign: bytes = fd.read(FieldSize.DWORD.value)  # unused
             self.rgbFM = fd.read(128)  # unused
             self.rgbFP = fd.read(128)  # unused
-            self.bSentinel, self.bCryptMethod = struct.unpack(
+            self.bSentinel, cryptMethod = struct.unpack(
                 'BB', fd.read(FieldSize.BYTE.value + FieldSize.BYTE.value))
+            self.bCryptMethod = CryptMethodEnum(int(cryptMethod))
             self.rgbReserved = fd.read(FieldSize.WORD.value)  # unused
             # repeated from above in spec
             self.bidNextB = BID(fd.read(FieldSize.ANSIDWORD.value))
@@ -2228,13 +2286,13 @@ class Root:
     def __init__(self, value_bytes: bytes, is_ansi: bool) -> None:
 
         if is_ansi:  # 40
-            self.ibFileEof, self.ibAMapLast, self.cbAMapFree, self.cbPMapFree, self.BREFNBT, self.BREFBBT, self.fAMapValid = \
+            self.ibFileEof, self.ibAMapLast, self.cbAMapFree, self.cbPMapFree, BREFNBT, BREFBBT, self.fAMapValid = \
                 struct.unpack('IIII8s8sB', value_bytes[4:-3])
         else:  # unicode #72
-            self.ibFileEof, self.ibAMapLast, self.cbAMapFree, self.cbPMapFree, self.BREFNBT, self.BREFBBT, self.fAMapValid = \
+            self.ibFileEof, self.ibAMapLast, self.cbAMapFree, self.cbPMapFree, BREFNBT, BREFBBT, self.fAMapValid = \
                 struct.unpack('QQQQ16s16sB', value_bytes[4:-3])
-        self.BREFNBT: BREF = BREF(self.BREFNBT)
-        self.BREFBBT: BREF = BREF(self.BREFBBT)
+        self.BREFNBT: BREF = BREF(BREFNBT)
+        self.BREFBBT: BREF = BREF(BREFBBT)
 
 
 class PST:
@@ -2312,7 +2370,7 @@ class PST:
                         attachment = message.get_attachment(
                             subattachment)
                         if attachment:
-                            if len(attachment.data) != 0:
+                            if len(attachment.BinaryData) != 0:
                                 filepath: str = os.path.join(
                                     path, attachment.Filename)
                                 if overwrite:
@@ -2321,7 +2379,7 @@ class PST:
                                 else:
                                     filepath = get_unused_filename(filepath)
                                 panutils.write_ascii_file(
-                                    filepath, attachment.data, 'wb')
+                                    filepath, attachment.BinaryData, 'wb')
                             attachments_completed += 1
                             yield attachments_completed
 
@@ -2369,7 +2427,7 @@ class PST:
     def get_pst_status(self) -> str:
 
         status: str = 'Valid PST: %s, Unicode: %s, CryptMethod: %s, Name: %s, Password: %s' % (
-            self.header.validPST, self.header.is_unicode, self.header.bCryptMethod, self.messaging.message_store.getval(PropIdEnum.PidTagDisplayName), self.messaging.PasswordCRC32Hash)
+            self.header.validPST, self.header.is_unicode, self.header.bCryptMethod, panutils.to_str(self.messaging.message_store.getval(PropIdEnum.PidTagDisplayName).value), self.messaging.PasswordCRC32Hash)
         return status
 
     @staticmethod
@@ -2421,7 +2479,7 @@ def get_unused_filename(filepath: str) -> str:
 
 
 def log_error(e) -> None:
-
+    # TODO: Use a general error logging and display mechanism
     # global error_log_list
     # error_log_list.append(e.message)
     # Implement a logging solution

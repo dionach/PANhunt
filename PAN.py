@@ -15,7 +15,7 @@ class PAN:
 
         self.path, self.sub_path, self.brand, self.pan = path, sub_path, brand, pan
 
-    def __repr__(self, mask_pan=True) -> str:
+    def __repr__(self, mask_pan: bool = True) -> str:
 
         if mask_pan:
             pan_out: str = self.get_masked_pan()
