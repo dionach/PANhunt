@@ -8,7 +8,6 @@ from typing import Any, Optional
 import msmsg
 import panutils
 import pst
-from config import PANHuntConfigSingleton
 from PAN import PAN
 from patterns import CardPatternSingleton
 from pbar import FileSubbar
@@ -75,14 +74,18 @@ class PANFile:
         # print(colorama.Fore.RED + panutils.unicode2ascii('ERROR %s on %s' %
         #       (error_msg, self.path)) + colorama.Fore.WHITE)
 
-    def check_regexs(self) -> Any:
+    def check_regexs(self, excluded_pans_list: list[str], search_extensions: dict[str, list[str]]) -> list[PAN]:
         """Checks the file for matching regular expressions: if a ZIP then each file in the ZIP (recursively) or the text in a document"""
 
         if self.filetype == 'ZIP':
             try:
                 if zipfile.is_zipfile(self.path):
                     zf = zipfile.ZipFile(self.path)
-                    self.check_zip_regexs(zf, '')
+                    self.check_zip_regexs(
+                        zf=zf,
+                        sub_path='',
+                        excluded_pans_list=excluded_pans_list,
+                        search_extensions=search_extensions)
                 else:
                     self.set_error('Invalid ZIP file')
             except IOError:
@@ -92,11 +95,9 @@ class PANFile:
 
         elif self.filetype == 'TEXT':
             try:
-                # file_text: str = panutils.read_ascii_file(self.path)
-
                 with open(self.path, 'r', encoding='ascii') as f:
-                    file_text = f.read()
-                    self.check_text_regexs(file_text, '')
+                    file_text: str = f.read()
+                    self.check_text_regexs(file_text, '', excluded_pans_list)
             # except WindowsError:
             #    self.set_error(sys.exc_info()[1])
             except IOError:
@@ -109,7 +110,10 @@ class PANFile:
                 try:
                     msg = msmsg.MSMSG(self.path)
                     if msg.validMSG:
-                        self.check_msg_regexs(msg, '')
+                        self.check_msg_regexs(msg=msg,
+                                              sub_path='',
+                                              excluded_pans_list=excluded_pans_list,
+                                              search_extensions=search_extensions)
                     else:
                         self.set_error('Invalid MSG file')
                 except IOError:
@@ -119,18 +123,18 @@ class PANFile:
 
         return self.matches
 
-    def check_text_regexs(self, text: str, sub_path: str) -> None:
+    def check_text_regexs(self, text: str, sub_path: str, excluded_pans_list: list[str]) -> None:
         """Uses regular expressions to check for PANs in text"""
 
         for brand, regex in CardPatternSingleton().instance.brands():
             pans: list[str] = regex.findall(text)
             if pans:
                 for pan in pans:
-                    if PAN.is_valid_luhn_checksum(pan) and not PAN.is_excluded(pan, PANHuntConfigSingleton.instance().excluded_pans):
+                    if PAN.is_valid_luhn_checksum(pan) and not PAN.is_excluded(pan, excluded_pans_list):
                         self.matches.append(
                             PAN(self.path, sub_path, brand, pan))
 
-    def check_pst_regexs(self, hunt_type: str) -> list[PAN]:
+    def check_pst_regexs(self, hunt_type: str, excluded_pans_list: list[str], search_extensions: dict[str, list[str]]) -> list[PAN]:
         """ Searches a pst file for regular expressions in messages and attachments using regular expressions"""
         # TODO: Move UI related code to main method of panhunt.py
         with FileSubbar(hunt_type, self.filename) as sub_pbar:
@@ -154,16 +158,17 @@ class PANFile:
                                     folder.path, '[NoSubject]')
                             if message.Body:
                                 self.check_text_regexs(
-                                    message.Body, message_path)
+                                    message.Body, message_path, excluded_pans_list)
                             if message.HasAttachments:
                                 for subattachment in message.subattachments:
-                                    if panutils.get_ext(subattachment.Filename) in PANHuntConfigSingleton.instance().search_extensions['TEXT'] + PANHuntConfigSingleton.instance().search_extensions['ZIP']:
-                                        attachment = message.get_attachment(
-                                            subattachment)
+                                    if panutils.get_ext(subattachment.Filename) in search_extensions['TEXT'] + search_extensions['ZIP']:
+                                        attachment: pst.Attachment = message.get_attachment(
+                                            subattachment)  # type: ignore
                                         # We already checked there is an attachment, this is to suppress type checkers
-                                        if attachment:
-                                            self.check_attachment_regexs(
-                                                attachment, message_path)
+                                        self.check_attachment_regexs(attachment=attachment,
+                                                                     sub_path=message_path,
+                                                                     excluded_pans_list=excluded_pans_list,
+                                                                     search_extensions=search_extensions)
                                     items_completed += 1
                             items_completed += 1
                             sub_pbar.update(items_found=len(
@@ -178,67 +183,79 @@ class PANFile:
 
         return self.matches
 
-    def check_attachment_regexs(self, attachment: pst.Attachment | msmsg.Attachment, sub_path: str) -> None:
+    def check_attachment_regexs(self, attachment: pst.Attachment | msmsg.Attachment, sub_path: str, excluded_pans_list: list[str], search_extensions: dict[str, list[str]]) -> None:
         """for PST and MSG attachments, check attachment for valid extension and then regexs"""
 
         attachment_ext: str = panutils.get_ext(attachment.Filename)
-        if attachment_ext in PANHuntConfigSingleton.instance().search_extensions['TEXT']:
+        if attachment_ext in search_extensions['TEXT']:
             if attachment.BinaryData:
                 # TODO: Check if utf-8 is okay or we need ascii
-                self.check_text_regexs(attachment.BinaryData.decode('utf-8'), os.path.join(
-                    sub_path, attachment.Filename))
+                self.check_text_regexs(text=attachment.BinaryData.decode('utf-8'),
+                                       sub_path=os.path.join(
+                                           sub_path, attachment.Filename),
+                                       excluded_pans_list=excluded_pans_list)
 
-        if attachment_ext in PANHuntConfigSingleton.instance().search_extensions['ZIP']:
+        if attachment_ext in search_extensions['ZIP']:
             if attachment.BinaryData:
                 try:
                     memory_zip = io.StringIO()
                     # TODO: Check if utf-8 is okay or we need ascii
                     memory_zip.write(attachment.BinaryData.decode('utf-8'))
                     zip_file = zipfile.ZipFile(memory_zip.read())
-                    self.check_zip_regexs(zip_file, os.path.join(
-                        sub_path, attachment.Filename))
+                    self.check_zip_regexs(zf=zip_file,
+                                          sub_path=os.path.join(
+                                              sub_path, attachment.Filename),
+                                          excluded_pans_list=excluded_pans_list,
+                                          search_extensions=search_extensions)
                     memory_zip.close()
                 except RuntimeError:  # RuntimeError: # e.g. zip needs password
                     self.set_error(sys.exc_info()[1])
 
-    def check_msg_regexs(self, msg: msmsg.MSMSG, sub_path: str) -> None:
+    def check_msg_regexs(self, msg: msmsg.MSMSG, sub_path: str, excluded_pans_list: list[str], search_extensions: dict[str, list[str]]) -> None:
 
         if msg.Body:
-            self.check_text_regexs(msg.Body, sub_path)
+            self.check_text_regexs(
+                text=msg.Body, sub_path=sub_path, excluded_pans_list=excluded_pans_list)
         if msg.attachments:
             for attachment in msg.attachments:
-                self.check_attachment_regexs(
-                    attachment, sub_path)
+                self.check_attachment_regexs(attachment=attachment,
+                                             sub_path=sub_path,
+                                             excluded_pans_list=excluded_pans_list,
+                                             search_extensions=search_extensions)
 
-    def check_zip_regexs(self, zf: zipfile.ZipFile, sub_path: str) -> None:
+    def check_zip_regexs(self, zf: zipfile.ZipFile, sub_path: str, excluded_pans_list: list[str], search_extensions: dict[str, list[str]]) -> None:
         """Checks a zip file for valid documents that are then checked for regexs"""
 
-        all_extensions = PANHuntConfigSingleton.instance().search_extensions['TEXT'] + \
-            PANHuntConfigSingleton(
-        ).instance.search_extensions['ZIP'] + PANHuntConfigSingleton.instance().search_extensions['SPECIAL']
+        all_extensions: list[str] = search_extensions['TEXT'] + \
+            search_extensions['ZIP'] + search_extensions['SPECIAL']
 
-        files_in_zip = [file_in_zip for file_in_zip in zf.namelist(
+        files_in_zip: list[str] = [file_in_zip for file_in_zip in zf.namelist(
         ) if panutils.get_ext(file_in_zip) in all_extensions]
         for file_in_zip in files_in_zip:
             # nested zip file
-            if panutils.get_ext(file_in_zip) in PANHuntConfigSingleton.instance().search_extensions['ZIP']:
+            if panutils.get_ext(file_in_zip) in search_extensions['ZIP']:
                 try:
                     memory_zip = io.StringIO()
                     memory_zip.write(panutils.decode_zip_text(
                         zf.open(file_in_zip).read()))
                     nested_zf = zipfile.ZipFile(memory_zip.read())
-                    self.check_zip_regexs(nested_zf, os.path.join(
-                        sub_path, panutils.decode_zip_filename(file_in_zip)))
+                    self.check_zip_regexs(zf=nested_zf,
+                                          sub_path=os.path.join(
+                                              sub_path, panutils.decode_zip_filename(file_in_zip)),
+                                          excluded_pans_list=excluded_pans_list,
+                                          search_extensions=search_extensions)
                     memory_zip.close()
                 except RuntimeError:  # RuntimeError: # e.g. zip needs password
                     self.set_error(sys.exc_info()[1])
             # normal doc
-            elif panutils.get_ext(file_in_zip) in PANHuntConfigSingleton.instance().search_extensions['TEXT']:
+            elif panutils.get_ext(file_in_zip) in search_extensions['TEXT']:
                 try:
-                    file_text = panutils.decode_zip_text(
+                    file_text: str = panutils.decode_zip_text(
                         zf.open(file_in_zip).read())
-                    self.check_text_regexs(file_text, os.path.join(
-                        sub_path, panutils.decode_zip_filename(file_in_zip)))
+                    self.check_text_regexs(text=file_text,
+                                           sub_path=os.path.join(
+                                               sub_path, panutils.decode_zip_filename(file_in_zip)),
+                                           excluded_pans_list=excluded_pans_list)
                 except RuntimeError:  # RuntimeError: # e.g. zip needs password
                     self.set_error(sys.exc_info()[1])
             else:  # SPECIAL
@@ -249,8 +266,11 @@ class PANFile:
                             zf.open(file_in_zip).read()))
                         msg: msmsg.MSMSG = msmsg.MSMSG(memory_msg.read())
                         if msg.validMSG:
-                            self.check_msg_regexs(msg, os.path.join(
-                                sub_path, panutils.decode_zip_filename(file_in_zip)))
+                            self.check_msg_regexs(msg=msg,
+                                                  sub_path=os.path.join(
+                                                      sub_path, panutils.decode_zip_filename(file_in_zip)),
+                                                  excluded_pans_list=excluded_pans_list,
+                                                  search_extensions=search_extensions)
                         memory_msg.close()
                 except RuntimeError:  # RuntimeError
                     self.set_error(sys.exc_info()[1])

@@ -15,6 +15,7 @@ import time
 from typing import Optional
 
 import colorama
+from PAN import PAN
 
 import panutils
 from config import PANHuntConfigSingleton
@@ -181,7 +182,8 @@ class Hunter:
         matches_found = 0
 
         for pan_file in text_or_zip_files:
-            matches = pan_file.check_regexs()
+            matches: list[PAN] = pan_file.check_regexs(excluded_pans_list=PANHuntConfigSingleton.instance().excluded_pans,
+                                            search_extensions=PANHuntConfigSingleton.instance().search_extensions)
             matches_found += len(matches)
             files_completed += 1
             self.pbar.update(
@@ -199,7 +201,10 @@ class Hunter:
         matches_found = 0
 
         for pst_file in pst_files:
-            matches = pst_file.check_pst_regexs(hunt_type)
+            matches = pst_file.check_pst_regexs(
+                hunt_type=hunt_type,
+                excluded_pans_list=PANHuntConfigSingleton.instance().excluded_pans,
+                search_extensions=PANHuntConfigSingleton.instance().search_extensions)
             matches_found += len(matches)
             psts_completed += 1
 

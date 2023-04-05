@@ -1,7 +1,5 @@
 import re
 
-from config import PANHuntConfigSingleton
-
 
 class PAN:
     """PAN: A class for recording PANs, their brand and where they were found"""
