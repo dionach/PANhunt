@@ -81,3 +81,10 @@ The script uses regular expressions to look for Visa, MasterCard or AMEX credit 
 
 The script allows for a configuration to be written that will default the application with settings such that you don't need to
 repeatedly specify exclude/include paths or the test PANs to exclude.
+
+## TODO
+
+- Use generics
+- Proper logging
+- Multithreading
+- Unit tests
