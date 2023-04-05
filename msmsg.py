@@ -204,13 +204,18 @@ class DirectoryEntry:
 
     def __init__(self, mscfb: 'MSCFB', directory_bytes: bytes) -> None:
 
-        if len(directory_bytes) != DirectoryEntry.ENTRY_SIZE:
-            raise MSGException('Directory Entry not 128 bytes')
+        raw_size: int = len(directory_bytes)
+        if raw_size != DirectoryEntry.ENTRY_SIZE:
+            # raise MSGException('Directory Entry not 128 bytes')
+            print('Directory Entry not 128 bytes')
+            return
 
         self.mscfb = mscfb
         self.NameLength = panutils.unpack_integer('H', directory_bytes[64:66])
         if self.NameLength > 64:
-            raise MSGException('Directory Entry name cannot be longer than 64')
+            # raise MSGException('Directory Entry name cannot be longer than 64')
+            print('Directory Entry name cannot be longer than 64')
+            return
         self.Name: str = directory_bytes[:self.NameLength -
                                          2].decode('utf-16-le')
         self.ObjectType, self.ColorFlag = struct.unpack(
@@ -309,7 +314,9 @@ class MSCFB:
         if not self.validCFB:
             # DevSkim: ignore DS187371
             # TODO: Instead of raising exceptions and exiting, log these errors.
-            raise MSGException('MSG file is not a valid CFB')
+            # raise MSGException('MSG file is not a valid CFB')
+            print(f'MSG file is not a valid CFB: {self.fd.name}')
+            return
         if self.MajorVersion == 3:
             self.SectorSize = 512
         else:  # 4
@@ -484,27 +491,6 @@ class PropertyEntry:
     def __str__(self) -> str:
         return f"{hex(self.PropertyTag)}-{str(self.value)}"
 
-    def to_binary(self) -> bytes:
-        if isinstance(self.value, bytes):
-            return self.value
-        raise TypeError()
-
-    def to_str(self) -> str:
-        if isinstance(self.value, str):
-            return self.value
-        raise TypeError()
-
-    def to_int(self) -> int:
-        if isinstance(self.value, int):
-            return self.value
-        raise TypeError()
-
-    def to_datetime(self) -> datetime:
-        if isinstance(self.value, datetime):
-            return self.value
-        raise TypeError()
-
-
 class Recipient:
     RecipientType: int
     DisplayName: str
@@ -515,18 +501,18 @@ class Recipient:
 
     def __init__(self, prop_stream: PropertyStream) -> None:
 
-        self.RecipientType = prop_stream.get_value(
-            PropIdEnum.PidTagRecipientType).to_int()
-        self.DisplayName = prop_stream.get_value(
-            PropIdEnum.PidTagDisplayName).to_str()
-        self.ObjectType = prop_stream.get_value(
-            PropIdEnum.PidTagObjectType).to_int()
-        self.AddressType = prop_stream.get_value(
-            PropIdEnum.PidTagAddressType).to_str()
-        self.EmailAddress = prop_stream.get_value(
-            PropIdEnum.PidTagEmailAddress).to_str()
-        self.DisplayType = prop_stream.get_value(
-            PropIdEnum.PidTagDisplayType).to_int()
+        self.RecipientType = panutils.to_int(prop_stream.get_value(
+            PropIdEnum.PidTagRecipientType).value)
+        self.DisplayName = panutils.to_str(prop_stream.get_value(
+            PropIdEnum.PidTagDisplayName).value)
+        self.ObjectType = panutils.to_int(prop_stream.get_value(
+            PropIdEnum.PidTagObjectType).value)
+        self.AddressType = panutils.to_str(prop_stream.get_value(
+            PropIdEnum.PidTagAddressType).value)
+        self.EmailAddress = panutils.to_str(prop_stream.get_value(
+            PropIdEnum.PidTagEmailAddress).value)
+        self.DisplayType = panutils.to_int(prop_stream.get_value(
+            PropIdEnum.PidTagDisplayType).value)
 
     def __str__(self) -> str:
         return f"{self.DisplayName} ({self.EmailAddress})"
