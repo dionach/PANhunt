@@ -3,7 +3,7 @@ import os
 import sys
 import zipfile
 from datetime import datetime
-from typing import Any, Optional
+from typing import Optional
 
 import msmsg
 import panutils
