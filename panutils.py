@@ -12,29 +12,7 @@ _ValueType = Optional[Union[int, float, dt.datetime, bool, str,
                             bytes, list[int], list[float], list[dt.datetime], list[bytes], list[str]]]
 
 
-def read_unicode_file(filename: str) -> str:
-    with codecs.open(filename, encoding='utf-8', mode='r') as f:
-        s: str = f.read()
-    return s
-
-
-def write_unicode_file(filename: str, data_to_write: str) -> None:
-    with codecs.open(filename, encoding='utf-8', mode='w') as f:
-        f.write(data_to_write)
-
-
-def read_ascii_file(fn, open_mode="r") -> Any:
-    with open(fn, open_mode, encoding='ascii') as f:
-        data_read = f.read()
-    return data_read
-
-
-def write_ascii_file(filename: str, data_to_write: Any, write_mode='w') -> None:
-    with open(filename, write_mode, encoding='ascii') as f:
-        f.write(data_to_write)
-
-
-def unicode2ascii(unicode_str: str) -> str:
+def unicode_to_ascii(unicode_str: str) -> str:
     return unicodedata.normalize('NFKD', unicode_str).encode('ascii', 'ignore').decode("ascii")
 
 

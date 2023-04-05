@@ -74,13 +74,13 @@ class Hunter:
         for pan_file in sorted([pan_file for pan_file in all_files if pan_file.matches], key=lambda x: x.filename):
             pan_header: str = 'FOUND PANs: %s (%s %s)' % (
                 pan_file.path, panutils.size_friendly(pan_file.size), pan_file.modified.strftime('%d/%m/%Y'))
-            print(colorama.Fore.RED + panutils.unicode2ascii(pan_header))
+            print(colorama.Fore.RED + panutils.unicode_to_ascii(pan_header))
             pan_report += pan_header + '\n'
             pan_list: str = '\t' + \
                 pan_sep.join([pan.__repr__(self.conf.mask_pans)
                               for pan in pan_file.matches])
             print(colorama.Fore.YELLOW +
-                  panutils.unicode2ascii(pan_list))
+                  panutils.unicode_to_ascii(pan_list))
             pan_report += pan_list + '\n\n'
 
         if len([pan_file for pan_file in all_files if pan_file.filetype == 'OTHER']) != 0:
@@ -92,13 +92,18 @@ class Hunter:
         pan_report = pan_report.replace('\n', os.linesep)
 
         print(colorama.Fore.WHITE +
-              f'Report written to {panutils.unicode2ascii(self.conf.output_file)}')
-        panutils.write_unicode_file(self.conf.output_file, pan_report)
+              f'Report written to {panutils.unicode_to_ascii(self.conf.output_file)}')
+
+        with open(self.conf.output_file, encoding='utf-8', mode='w') as f:
+            f.write(pan_report)
+
         self.__add_hash_to_file(self.conf.output_file)
 
     def check_file_hash(self, text_file: str) -> None:
 
-        text_output: str = panutils.read_unicode_file(text_file)
+        with open(text_file, encoding='utf-8', mode='r') as f:
+            text_output: str = f.read()
+
         hash_pos: int = text_output.rfind(os.linesep)
         hash_in_file: str = text_output[hash_pos + len(os.linesep):]
         hash_check: str = self.__get_text_hash(text_output[:hash_pos])
@@ -196,11 +201,15 @@ class Hunter:
 
     def __add_hash_to_file(self, text_file: str) -> None:
 
-        text: str = panutils.read_unicode_file(text_file)
+        with open(text_file, encoding='utf-8', mode='r') as f:
+            text: str = f.read()
+
         hash_check: str = self.__get_text_hash(text)
 
         text += os.linesep + hash_check
-        panutils.write_unicode_file(text_file, text)
+
+        with open(text_file, encoding='utf-8', mode='w') as f:
+            f.write(text)
 
     def __get_text_hash(self, text: str | bytes) -> str:
         encoded_text: bytes

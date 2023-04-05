@@ -89,8 +89,11 @@ class PANFile:
 
         elif self.filetype == 'TEXT':
             try:
-                file_text: str = panutils.read_ascii_file(self.path)
-                self.check_text_regexs(file_text, '')
+                # file_text: str = panutils.read_ascii_file(self.path)
+
+                with open(self.path, 'r', encoding='ascii') as f:
+                    file_text = f.read()
+                    self.check_text_regexs(file_text, '')
             # except WindowsError:
             #    self.set_error(sys.exc_info()[1])
             except IOError:

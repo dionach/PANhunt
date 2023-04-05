@@ -10,11 +10,10 @@ import os
 import struct
 from datetime import datetime
 from io import BufferedReader
-from typing import TYPE_CHECKING, Optional, TypeAlias, Union
+from typing import Optional, TypeAlias, Union
 
 import panutils
 from exceptions import MSGException
-from panutils import write_ascii_file, write_unicode_file
 from PropIdEnum import PropIdEnum
 from PType import PType
 from PTypeEnum import PTypeEnum
@@ -745,11 +744,13 @@ def test_folder_msgs(folder_path: str) -> None:
                 if len(attachment.BinaryData) != 0:
                     filepath: str = os.path.join(
                         folder_path, attachment.Filename)
-                    write_ascii_file(filepath, attachment.BinaryData, 'wb')
+                    with open(filepath, 'wb', encoding='ascii') as f:
+                        f.write(attachment.BinaryData)
         # except Exception as e:
         #    s += 'ERROR: %s\n' % e
 
-    write_unicode_file(os.path.join(folder_path, 'msgs_test.txt'), s)
+    with open(os.path.join(folder_path, 'msgs_test.txt'), encoding='utf-8', mode='w') as f:
+        f.write(s)
 
 
 ###################################################################################################################################
@@ -760,7 +761,6 @@ def test_folder_msgs(folder_path: str) -> None:
 # |_|  |_|\__,_|_|_| |_|
 #
 ###################################################################################################################################
-
 
 if __name__ == "__main__":
 

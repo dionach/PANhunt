@@ -73,7 +73,7 @@ class FileSubbar:
         return self
 
     def __create__(self) -> None:
-        pbar_widgets: list = ['%s Hunt %s: ' % (self.hunt_type, panutils.unicode2ascii(self.filename)), progressbar.Percentage(), ' ', progressbar.Bar(
+        pbar_widgets: list = ['%s Hunt %s: ' % (self.hunt_type, panutils.unicode_to_ascii(self.filename)), progressbar.Percentage(), ' ', progressbar.Bar(
             marker=progressbar.RotatingMarker()), ' ', progressbar.ETA(), progressbar.FormatLabel(' %ss:0' % self.hunt_type)]
         self.pbar = progressbar.ProgressBar(
             widgets=pbar_widgets).start()

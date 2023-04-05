@@ -899,7 +899,7 @@ class PType:
                 value_bytes)
             s: list[str] = []
             for i in range(ulCount):
-                s.append(value_bytes[rgulDataOffsets[i]                         :rgulDataOffsets[i + 1]].decode('utf-16-le'))
+                s.append(value_bytes[rgulDataOffsets[i]:rgulDataOffsets[i + 1]].decode('utf-16-le'))
             return s
         if self.ptype == PTypeEnum.PtypMultipleString8:
             ulCount, rgulDataOffsets = self.get_multi_value_offsets(
@@ -1697,18 +1697,18 @@ class Message:
 class Attachment:
 
     ltp: LTP
-    slentry:SLENTRY
-    pc:PC
+    slentry: SLENTRY
+    pc: PC
 
-    DisplayName:str
-    AttachMethod:int
-    AttachmentSize:int
-    AttachFilename:str
-    AttachLongFilename:str
-    Filename:str
+    DisplayName: str
+    AttachMethod: int
+    AttachmentSize: int
+    AttachFilename: str
+    AttachLongFilename: str
+    Filename: str
     BinaryData: bytes
-    AttachMimeTag:str
-    AttachExtension:str
+    AttachMimeTag: str
+    AttachExtension: str
 
     def __init__(self, ltp: LTP, slentry: SLENTRY) -> None:
 
@@ -2378,8 +2378,8 @@ class PST:
                                         os.remove(filepath)
                                 else:
                                     filepath = get_unused_filename(filepath)
-                                panutils.write_ascii_file(
-                                    filepath, attachment.BinaryData, 'wb')
+                                with open(filepath, 'wb', encoding='ascii') as f:
+                                    f.write(attachment.BinaryData)
                             attachments_completed += 1
                             yield attachments_completed
 
@@ -2403,8 +2403,9 @@ class PST:
                         [subattachment.__repr__() for subattachment in message.subattachments]))
                 msg_txt += '\n%s\n\n\n' % message.Body
             if msg_txt:
-                panutils.write_ascii_file(
-                    filepath, panutils.unicode2ascii(msg_txt), 'w')
+                with open(filepath, 'w', encoding='ascii') as f:
+                    f.write(panutils.unicode_to_ascii(msg_txt))
+
                 messages_completed += 1
                 yield messages_completed
 
@@ -2440,13 +2441,14 @@ class PST:
         """either does a dictionary attack against the PST password CRC hash, or does a brute force of up to 4 chars"""
 
         if dictionary_file:
-            dic_entries: list[str] = panutils.read_ascii_file(
-                dictionary_file).split('\n')
-            for password_check in dic_entries:
-                crc_check: int = CRC.ComputeCRC(
-                    password_check.strip().encode())
-                if crc == crc_check:
-                    return password_check
+            with open(dictionary_file, 'r', encoding='ascii') as f:
+                dic_entries: list[str] = f.readlines()
+
+                for password_check in dic_entries:
+                    crc_check: int = CRC.ComputeCRC(
+                        password_check.strip().encode())
+                    if crc == crc_check:
+                        return password_check
         else:  # brute force
             charset: str = string.ascii_lowercase + string.digits
             for password_length in range(1, 5):
@@ -2500,7 +2502,7 @@ def log_error(e) -> None:
 def test_status_pst(pst_filepath) -> None:
 
     pst = PST(pst_filepath)
-    print((panutils.unicode2ascii(pst.get_pst_status())))
+    print((panutils.unicode_to_ascii(pst.get_pst_status())))
     print(('Total Messages: %s' % pst.get_total_message_count()))
     print(('Total Attachments: %s' % pst.get_total_attachment_count()))
     pst.close()
@@ -2535,7 +2537,7 @@ def test_folder_psts(psts_folder) -> None:
             s += 'Opening %s\n' % pst_filepath
             # error_log_list = []
             pst = PST(pst_filepath)
-            status: str = panutils.unicode2ascii(pst.get_pst_status())
+            status: str = panutils.unicode_to_ascii(pst.get_pst_status())
             print(status)
             password: str = ''
             if pst.messaging.PasswordCRC32Hash:
@@ -2549,7 +2551,8 @@ def test_folder_psts(psts_folder) -> None:
         except Exception as e:
             s += 'ERROR: %s\n' % e
 
-    panutils.write_ascii_file(os.path.join(psts_folder, 'psts_test.txt'), s)
+    with open(os.path.join(psts_folder, 'psts_test.txt'), 'w', encoding='ascii') as f:
+        f.write(s)
 
 
 ###################################################################################################################################
