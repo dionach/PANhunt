@@ -38,7 +38,6 @@ app_version = '1.3'
 class Hunter:
 
     pbar: ProgressbarSingleton = ProgressbarSingleton().instance
-    conf: PANHuntConfigSingleton = PANHuntConfigSingleton().instance
 
     def hunt_pans(self) -> tuple[int, int, list[PANFile]]:
 
@@ -65,19 +64,19 @@ class Hunter:
         pan_report: str = 'PAN Hunt Report - %s\n%s\n' % (
             time.strftime("%H:%M:%S %d/%m/%Y"), '=' * 100)
         pan_report += 'Searched %s\nExcluded %s\n' % (
-            self.conf.search_dir, ','.join(self.conf.excluded_directories))
+            PANHuntConfigSingleton.instance().search_dir, ','.join(PANHuntConfigSingleton.instance().excluded_directories))
         pan_report += 'Command: %s\n' % (' '.join(sys.argv))
         pan_report += 'Uname: %s\n' % (' | '.join(platform.uname()))
         pan_report += 'Searched %s files. Found %s possible PANs.\n%s\n\n' % (
             total_files_searched, pans_found, '=' * 100)
 
         for pan_file in sorted([pan_file for pan_file in all_files if pan_file.matches], key=lambda x: x.filename):
-            pan_header: str = 'FOUND PANs: %s (%s %s)' % (
-                pan_file.path, panutils.size_friendly(pan_file.size), pan_file.modified.strftime('%d/%m/%Y'))
+            pan_header: str = f"FOUND PANs: {pan_file.path} ({panutils.size_friendly(pan_file.size)} {pan_file.modified.strftime('%d/%m/%Y')})"
+
             print(colorama.Fore.RED + panutils.unicode_to_ascii(pan_header))
             pan_report += pan_header + '\n'
             pan_list: str = '\t' + \
-                pan_sep.join([pan.__repr__(self.conf.mask_pans)
+                pan_sep.join([pan.get_masked_pan()
                               for pan in pan_file.matches])
             print(colorama.Fore.YELLOW +
                   panutils.unicode_to_ascii(pan_list))
@@ -92,12 +91,12 @@ class Hunter:
         pan_report = pan_report.replace('\n', os.linesep)
 
         print(colorama.Fore.WHITE +
-              f'Report written to {panutils.unicode_to_ascii(self.conf.output_file)}')
+              f'Report written to {panutils.unicode_to_ascii(PANHuntConfigSingleton.instance().output_file)}')
 
-        with open(self.conf.output_file, encoding='utf-8', mode='w') as f:
+        with open(PANHuntConfigSingleton.instance().output_file, encoding='utf-8', mode='w') as f:
             f.write(pan_report)
 
-        self.__add_hash_to_file(self.conf.output_file)
+        self.__append_hash(PANHuntConfigSingleton.instance().output_file)
 
     def check_file_hash(self, text_file: str) -> None:
 
@@ -117,10 +116,10 @@ class Hunter:
         """Recursively searches a directory for files. search_extensions is a dictionary of extension lists"""
 
         all_extensions: list[str] = [ext for ext_list in list(
-            PANHuntConfigSingleton().instance.search_extensions.values()) for ext in ext_list]
+            PANHuntConfigSingleton.instance().search_extensions.values()) for ext in ext_list]
 
         extension_types: dict[str, str] = {}
-        for ext_type, ext_list in PANHuntConfigSingleton().instance.search_extensions.items():
+        for ext_type, ext_list in PANHuntConfigSingleton.instance().search_extensions.items():
             for ext in ext_list:
                 extension_types[ext] = ext_type
 
@@ -132,9 +131,10 @@ class Hunter:
         docs_found = 0
 
         root_total_items: int = 0
-        for root, sub_ds, files in os.walk(PANHuntConfigSingleton().instance.search_dir):
+        for root, sub_ds, files in os.walk(PANHuntConfigSingleton.instance().search_dir):
             sub_dirs: list[str] = [check_dir for check_dir in sub_ds if os.path.join(
-                root, check_dir).lower() not in PANHuntConfigSingleton().instance.excluded_directories]
+                root, check_dir)
+                .lower() not in PANHuntConfigSingleton.instance().excluded_directories]
             if not root_dir_dirs:
                 root_dir_dirs = [os.path.join(root, sub_dir)
                                  for sub_dir in sub_dirs]
@@ -142,10 +142,13 @@ class Hunter:
             if root in root_dir_dirs:
                 root_items_completed += 1
                 self.pbar.update(
-                    hunt_type='Doc', items_found=docs_found, items_total=root_total_items, items_completed=root_items_completed)
+                    hunt_type='Doc',
+                    items_found=docs_found,
+                    items_total=root_total_items,
+                    items_completed=root_items_completed)
 
             for filename in files:
-                if root == PANHuntConfigSingleton().instance.search_dir:
+                if root == PANHuntConfigSingleton.instance().search_dir:
                     root_items_completed += 1
                 pan_file = PANFile(filename, root)
                 if pan_file.ext.lower() in all_extensions:
@@ -153,13 +156,16 @@ class Hunter:
                     pan_file.filetype = extension_types[pan_file.ext.lower()]
                     if pan_file.filetype in ('TEXT', 'SPECIAL') and pan_file.size > TEXT_FILE_SIZE_LIMIT:
                         pan_file.filetype = 'OTHER'
-                        pan_file.set_error('File size {1} over limit of {0} for checking'.format(
-                            panutils.size_friendly(TEXT_FILE_SIZE_LIMIT), panutils.size_friendly(pan_file.size)))
+                        pan_file.set_error(
+                            f'File size {panutils.size_friendly(pan_file.size)} over limit of {panutils.size_friendly(TEXT_FILE_SIZE_LIMIT)} for checking')
                     doc_files.append(pan_file)
                     if not pan_file.errors:
                         docs_found += 1
                     self.pbar.update(
-                        hunt_type='Doc', items_found=docs_found, items_total=root_total_items, items_completed=root_items_completed)
+                        hunt_type='Doc',
+                        items_found=docs_found,
+                        items_total=root_total_items,
+                        items_completed=root_items_completed)
 
         self.pbar.finish()
 
@@ -199,7 +205,7 @@ class Hunter:
 
         return total_psts, matches_found
 
-    def __add_hash_to_file(self, text_file: str) -> None:
+    def __append_hash(self, text_file: str) -> None:
 
         with open(text_file, encoding='utf-8', mode='r') as f:
             text: str = f.read()
@@ -282,24 +288,22 @@ def main() -> None:
     excluded_pans_string = str(args.exclude_pan)
     config_file = str(args.config)
 
-    # First, read the hardcoded default values.
-    panhunt_config: PANHuntConfigSingleton = PANHuntConfigSingleton().instance
-
+    # First, initiate the singleton the hardcoded default values.
     # Second, read the config file
-    panhunt_config = panhunt_config.from_file(
-        config_file=config_file).instance
+    PANHuntConfigSingleton.instance().from_file(
+        config_file=config_file)
 
     # Finally, read the CLI parameters as they override the default and config file values
-    panhunt_config = panhunt_config.from_args(search_dir=search_dir,
-                                              output_file=output_file,
-                                              mask_pans=mask_pans,
-                                              excluded_directories_string=excluded_directories_string,
-                                              text_extensions_string=text_extensions_string,
-                                              zip_extensions_string=zip_extensions_string,
-                                              special_extensions_string=special_extensions_string,
-                                              mail_extensions_string=mail_extensions_string,
-                                              other_extensions_string=other_extensions_string,
-                                              excluded_pans_string=excluded_pans_string).instance
+    PANHuntConfigSingleton.instance().from_args(search_dir=search_dir,
+                                                output_file=output_file,
+                                                mask_pans=mask_pans,
+                                                excluded_directories_string=excluded_directories_string,
+                                                text_extensions_string=text_extensions_string,
+                                                zip_extensions_string=zip_extensions_string,
+                                                special_extensions_string=special_extensions_string,
+                                                mail_extensions_string=mail_extensions_string,
+                                                other_extensions_string=other_extensions_string,
+                                                excluded_pans_string=excluded_pans_string)
 
     total_files_searched, pans_found, all_files = hunter.hunt_pans()
 

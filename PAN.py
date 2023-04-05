@@ -15,20 +15,13 @@ class PAN:
 
         self.path, self.sub_path, self.brand, self.pan = path, sub_path, brand, pan
 
-    def __repr__(self, mask_pan: bool = True) -> str:
-
-        if mask_pan:
-            pan_out: str = self.get_masked_pan()
-        else:
-            pan_out = self.pan
-        return '%s %s:%s' % (self.sub_path, self.brand, pan_out)
-
     def get_masked_pan(self) -> str:
-        return re.sub(r'\d', '*', self.pan[:-4]) + self.pan[-4:]
+        pan_out: str = re.sub(r'\d', '*', self.pan[:-4]) + self.pan[-4:]
+        return f'{self.sub_path} {self.brand}:{pan_out}'
 
     @staticmethod
-    def is_excluded(pan: str) -> bool:
-        for excluded_pan in PANHuntConfigSingleton().instance.excluded_pans:
+    def is_excluded(pan: str, excluded_pans: list[str]) -> bool:
+        for excluded_pan in excluded_pans:
             if pan == excluded_pan:
                 return True
         return False

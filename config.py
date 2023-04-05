@@ -20,10 +20,15 @@ class PANHuntConfigSingleton:
     }
     excluded_pans: list[str] = []
 
-    def __new__(cls) -> 'PANHuntConfigSingleton':
-        if not hasattr(cls, 'instance'):
-            cls.instance = super(PANHuntConfigSingleton, cls).__new__(cls)
-        return cls.instance
+    # Here is the core of the singleton
+    __instance: Optional['PANHuntConfigSingleton'] = None
+
+    @staticmethod
+    def instance() -> "PANHuntConfigSingleton":
+        """ Static access method. """
+        if PANHuntConfigSingleton.__instance is None:
+            PANHuntConfigSingleton.__instance = PANHuntConfigSingleton()
+        return PANHuntConfigSingleton.__instance
 
     def __init__(self,
                  search_dir: Optional[str] = None,
@@ -73,32 +78,54 @@ class PANHuntConfigSingleton:
                   special_extensions_string: Optional[str] = None,
                   mail_extensions_string: Optional[str] = None,
                   other_extensions_string: Optional[str] = None,
-                  excluded_pans_string: Optional[str] = None) -> 'PANHuntConfigSingleton':
+                  excluded_pans_string: Optional[str] = None) -> None:
         """If any parameter is provided, it overwrites the previous value
         """
 
-        c: PANHuntConfigSingleton = PANHuntConfigSingleton().instance
-
-        c.__update(search_dir, output_file, mask_pans, excluded_directories_string, text_extensions_string,
-                   zip_extensions_string, special_extensions_string, mail_extensions_string, other_extensions_string, excluded_pans_string, c)
-
-        return c
+        PANHuntConfigSingleton.instance().update(search_dir, output_file, mask_pans, excluded_directories_string, text_extensions_string,
+                                                 zip_extensions_string, special_extensions_string, mail_extensions_string, other_extensions_string, excluded_pans_string)
 
     @staticmethod
-    def from_file(config_file: Optional[str]) -> 'PANHuntConfigSingleton':
+    def from_file(config_file: Optional[str]) -> None:
         """If a config file provided and it has specific values, they overwrite the previous values
 
         Args:
             config_file (Optional[str]): Path to config file in INI format
         """
 
+        config_from_file: dict = PANHuntConfigSingleton.parse_file(config_file)
+
+        search_dir: Optional[str] = PANHuntConfigSingleton.try_parse(
+            config_from_file=config_from_file, property='search')
+        excluded_directories_string: Optional[str] = PANHuntConfigSingleton.try_parse(
+            config_from_file=config_from_file, property='exclude')
+        text_extensions_string: Optional[str] = PANHuntConfigSingleton.try_parse(
+            config_from_file=config_from_file, property='textfiles')
+        zip_extensions_string: Optional[str] = PANHuntConfigSingleton.try_parse(
+            config_from_file=config_from_file, property='zipfiles')
+        special_extensions_string: Optional[str] = PANHuntConfigSingleton.try_parse(
+            config_from_file=config_from_file, property='specialfiles')
+        mail_extensions_string: Optional[str] = PANHuntConfigSingleton.try_parse(
+            config_from_file=config_from_file, property='mailfiles')
+        other_extensions_string: Optional[str] = PANHuntConfigSingleton.try_parse(
+            config_from_file=config_from_file, property='otherfiles')
+        output_file: Optional[str] = PANHuntConfigSingleton.try_parse(
+            config_from_file=config_from_file, property='outfile')
+        mask_pans: Optional[bool] = PANHuntConfigSingleton.check_masked(
+            config_from_file)
+        excluded_pans_string: Optional[str] = PANHuntConfigSingleton.try_parse(
+            config_from_file=config_from_file, property='excludepans')
+
+        PANHuntConfigSingleton.instance().update(search_dir, output_file, mask_pans, excluded_directories_string, text_extensions_string,
+                                                 zip_extensions_string, special_extensions_string, mail_extensions_string, other_extensions_string, excluded_pans_string)
+
+    @staticmethod
+    def parse_file(config_file):
         if config_file is None:
-            return PANHuntConfigSingleton().instance
+            raise ValueError("Configuration file value cannut be null.")
 
         if not os.path.isfile(config_file):
-            return PANHuntConfigSingleton().instance
-
-        c: PANHuntConfigSingleton = PANHuntConfigSingleton().instance
+            raise ValueError("Invalid configuration file.")
 
         config: configparser.ConfigParser = configparser.ConfigParser()
         config.read(config_file)
@@ -106,76 +133,48 @@ class PANHuntConfigSingleton:
 
         for nvp in config.items('DEFAULT'):
             config_from_file[nvp[0]] = nvp[1]
-
-        search_dir: Optional[str] = None
-        if 'search' in config_from_file:
-            search_dir = str(config_from_file['search'])
-
-        excluded_directories_string: Optional[str] = None
-        if 'exclude' in config_from_file:
-            excluded_directories_string = str(config_from_file['exclude'])
-
-        text_extensions_string: Optional[str] = None
-        if 'textfiles' in config_from_file:
-            text_extensions_string = str(config_from_file['textfiles'])
-
-        zip_extensions_string: Optional[str] = None
-        if 'zipfiles' in config_from_file:
-            zip_extensions_string = str(config_from_file['zipfiles'])
-
-        special_extensions_string: Optional[str] = None
-        if 'specialfiles' in config_from_file:
-            special_extensions_string = str(config_from_file['specialfiles'])
-
-        mail_extensions_string: Optional[str] = None
-        if 'mailfiles' in config_from_file:
-            mail_extensions_string = str(config_from_file['mailfiles'])
-
-        other_extensions_string: Optional[str] = None
-        if 'otherfiles' in config_from_file:
-            other_extensions_string = str(config_from_file['otherfiles'])
-
-        output_file: Optional[str] = None
-        if 'outfile' in config_from_file:
-            output_file = str(config_from_file['outfile'])
-
-        mask_pans: bool = False
-        if 'unmask' in config_from_file:
-            mask_pans = not (config_from_file['unmask'].upper() == 'TRUE')
-
-        excluded_pans_string: Optional[str] = None
-        if 'excludepans' in config_from_file:
-            excluded_pans_string = str(config_from_file['excludepans'])
-
-        c.__update(search_dir, output_file, mask_pans, excluded_directories_string, text_extensions_string,
-                   zip_extensions_string, special_extensions_string, mail_extensions_string, other_extensions_string, excluded_pans_string, c)
-
-        return c
+        return config_from_file
 
     @staticmethod
-    def __update(search_dir: Optional[str], output_file: Optional[str], mask_pans: bool, excluded_directories_string: Optional[str], text_extensions_string: Optional[str], zip_extensions_string: Optional[str], special_extensions_string: Optional[str], mail_extensions_string: Optional[str], other_extensions_string: Optional[str], excluded_pans_string: Optional[str], c: 'PANHuntConfigSingleton') -> None:
+    def check_masked(config_from_file) -> Optional[bool]:
+        mask_pans: Optional[bool] = None
+        if 'unmask' in config_from_file:
+            mask_pans = not (config_from_file['unmask'].upper() == 'TRUE')
+        return mask_pans
+
+    @staticmethod
+    def try_parse(config_from_file: dict, property: str) -> Optional[str]:
+        if property in config_from_file:
+            return str(config_from_file[property])
+        return None
+
+    @staticmethod
+    def update(search_dir: Optional[str], output_file: Optional[str], mask_pans: Optional[bool], excluded_directories_string: Optional[str], text_extensions_string: Optional[str], zip_extensions_string: Optional[str], special_extensions_string: Optional[str], mail_extensions_string: Optional[str], other_extensions_string: Optional[str], excluded_pans_string: Optional[str]) -> None:
+
+        conf = PANHuntConfigSingleton.instance()
         if search_dir and search_dir != 'None':
-            c.search_dir = search_dir
+            conf.search_dir = search_dir
 
         if output_file and output_file != 'None':
-            c.output_file = output_file
+            conf.output_file = output_file
 
-        c.mask_pans = mask_pans
+        if mask_pans:
+            conf.mask_pans = mask_pans
 
         if excluded_directories_string and excluded_directories_string != 'None':
-            c.excluded_directories = [exc_dir.lower()
-                                      for exc_dir in excluded_directories_string.split(',')]
+            conf.excluded_directories = [exc_dir.lower()
+                                         for exc_dir in excluded_directories_string.split(',')]
         if text_extensions_string and text_extensions_string != 'None':
-            c.search_extensions['TEXT'] = text_extensions_string.split(',')
+            conf.search_extensions['TEXT'] = text_extensions_string.split(',')
         if zip_extensions_string and zip_extensions_string != 'None':
-            c.search_extensions['ZIP'] = zip_extensions_string.split(',')
+            conf.search_extensions['ZIP'] = zip_extensions_string.split(',')
         if special_extensions_string and special_extensions_string != 'None':
-            c.search_extensions['SPECIAL'] = special_extensions_string.split(
+            conf.search_extensions['SPECIAL'] = special_extensions_string.split(
                 ',')
         if mail_extensions_string and mail_extensions_string != 'None':
-            c.search_extensions['MAIL'] = mail_extensions_string.split(',')
+            conf.search_extensions['MAIL'] = mail_extensions_string.split(',')
         if other_extensions_string and other_extensions_string != 'None':
-            c.search_extensions['OTHER'] = other_extensions_string.split(
+            conf.search_extensions['OTHER'] = other_extensions_string.split(
                 ',')
         if excluded_pans_string and excluded_pans_string != excluded_pans_string and len(excluded_pans_string) > 0:
-            c.excluded_pans = excluded_pans_string.split(',')
+            conf.excluded_pans = excluded_pans_string.split(',')

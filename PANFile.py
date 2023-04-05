@@ -1,6 +1,5 @@
 import io
 import os
-import re
 import sys
 import zipfile
 from datetime import datetime
@@ -8,10 +7,10 @@ from typing import Any, Optional
 
 import msmsg
 import panutils
-from patterns import CardPatternSingleton
 import pst
 from config import PANHuntConfigSingleton
 from PAN import PAN
+from patterns import CardPatternSingleton
 from pbar import FileSubbar
 
 
@@ -26,6 +25,10 @@ class PANFile:
     filetype: Optional[str]
     errors: Optional[list]
     matches: list[PAN]
+    size: int
+    accessed: datetime
+    modified: datetime
+    created: datetime
 
     def __init__(self, filename: str, file_dir: str) -> None:
         self.filename = filename
@@ -44,10 +47,10 @@ class PANFile:
 
         try:
             stat: os.stat_result = os.stat(self.path)
-            self.size: int = stat.st_size
-            self.accessed: datetime = self.dtm_from_ts(stat.st_atime)
-            self.modified: datetime = self.dtm_from_ts(stat.st_mtime)
-            self.created: datetime = self.dtm_from_ts(stat.st_ctime)
+            self.size = stat.st_size
+            self.accessed = self.dtm_from_ts(stat.st_atime)
+            self.modified = self.dtm_from_ts(stat.st_mtime)
+            self.created = self.dtm_from_ts(stat.st_ctime)
         except WindowsError:
             self.size = -1
             self.set_error(sys.exc_info()[1])
@@ -123,7 +126,7 @@ class PANFile:
             pans: list[str] = regex.findall(text)
             if pans:
                 for pan in pans:
-                    if PAN.is_valid_luhn_checksum(pan) and not PAN.is_excluded(pan):
+                    if PAN.is_valid_luhn_checksum(pan) and not PAN.is_excluded(pan, PANHuntConfigSingleton.instance().excluded_pans):
                         self.matches.append(
                             PAN(self.path, sub_path, brand, pan))
 
@@ -154,7 +157,7 @@ class PANFile:
                                     message.Body, message_path)
                             if message.HasAttachments:
                                 for subattachment in message.subattachments:
-                                    if panutils.get_ext(subattachment.Filename) in PANHuntConfigSingleton().instance.search_extensions['TEXT'] + PANHuntConfigSingleton().instance.search_extensions['ZIP']:
+                                    if panutils.get_ext(subattachment.Filename) in PANHuntConfigSingleton.instance().search_extensions['TEXT'] + PANHuntConfigSingleton.instance().search_extensions['ZIP']:
                                         attachment = message.get_attachment(
                                             subattachment)
                                         # We already checked there is an attachment, this is to suppress type checkers
@@ -179,13 +182,13 @@ class PANFile:
         """for PST and MSG attachments, check attachment for valid extension and then regexs"""
 
         attachment_ext: str = panutils.get_ext(attachment.Filename)
-        if attachment_ext in PANHuntConfigSingleton().instance.search_extensions['TEXT']:
+        if attachment_ext in PANHuntConfigSingleton.instance().search_extensions['TEXT']:
             if attachment.BinaryData:
                 # TODO: Check if utf-8 is okay or we need ascii
                 self.check_text_regexs(attachment.BinaryData.decode('utf-8'), os.path.join(
                     sub_path, attachment.Filename))
 
-        if attachment_ext in PANHuntConfigSingleton().instance.search_extensions['ZIP']:
+        if attachment_ext in PANHuntConfigSingleton.instance().search_extensions['ZIP']:
             if attachment.BinaryData:
                 try:
                     memory_zip = io.StringIO()
@@ -210,15 +213,15 @@ class PANFile:
     def check_zip_regexs(self, zf: zipfile.ZipFile, sub_path: str) -> None:
         """Checks a zip file for valid documents that are then checked for regexs"""
 
-        all_extensions = PANHuntConfigSingleton().instance.search_extensions['TEXT'] + \
+        all_extensions = PANHuntConfigSingleton.instance().search_extensions['TEXT'] + \
             PANHuntConfigSingleton(
-        ).instance.search_extensions['ZIP'] + PANHuntConfigSingleton().instance.search_extensions['SPECIAL']
+        ).instance.search_extensions['ZIP'] + PANHuntConfigSingleton.instance().search_extensions['SPECIAL']
 
         files_in_zip = [file_in_zip for file_in_zip in zf.namelist(
         ) if panutils.get_ext(file_in_zip) in all_extensions]
         for file_in_zip in files_in_zip:
             # nested zip file
-            if panutils.get_ext(file_in_zip) in PANHuntConfigSingleton().instance.search_extensions['ZIP']:
+            if panutils.get_ext(file_in_zip) in PANHuntConfigSingleton.instance().search_extensions['ZIP']:
                 try:
                     memory_zip = io.StringIO()
                     memory_zip.write(panutils.decode_zip_text(
@@ -230,7 +233,7 @@ class PANFile:
                 except RuntimeError:  # RuntimeError: # e.g. zip needs password
                     self.set_error(sys.exc_info()[1])
             # normal doc
-            elif panutils.get_ext(file_in_zip) in PANHuntConfigSingleton().instance.search_extensions['TEXT']:
+            elif panutils.get_ext(file_in_zip) in PANHuntConfigSingleton.instance().search_extensions['TEXT']:
                 try:
                     file_text = panutils.decode_zip_text(
                         zf.open(file_in_zip).read())
