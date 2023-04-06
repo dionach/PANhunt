@@ -84,6 +84,13 @@ def unpack_float(format: str, buffer: bytes) -> float:
         raise ArgumentError(format, buffer)
 
 
+def unpack_bytes(format: str, buffer: bytes) -> bytes:
+    if re.compile(r'\d+s').match(format):
+        return bytes(struct.unpack(format, buffer)[0])
+    else:
+        raise ArgumentError(format, buffer)
+
+
 def as_binary(value: _ValueType) -> bytes:
     if isinstance(value, bytes):
         return value

@@ -953,8 +953,9 @@ class PType:
     def get_multi_value_offsets(self, value_bytes: bytes) -> tuple[int, list[int]]:
 
         ulCount: int = panutils.unpack_integer('I', value_bytes[:4])
-        rgulDataOffsets: list[int] = [struct.unpack(
-            'I', value_bytes[(i + 1) * 4:(i + 2) * 4])[0] for i in range(ulCount)]
+        rgulDataOffsets: list[int] = [panutils.unpack_integer(
+            'I', value_bytes[(i + 1) * 4:(i + 2) * 4]) for i in range(ulCount)]
+
         rgulDataOffsets.append(len(value_bytes))
         return ulCount, rgulDataOffsets
 
@@ -1806,8 +1807,8 @@ class Messaging:
             PropIdEnum.PidTagRecordKey).value)  # binary
 
         if PropIdEnum.PidTagPstPassword in self.message_store.properties.keys():
-            self.PasswordCRC32Hash = struct.unpack('I', struct.pack(
-                'i', panutils.as_int(self.message_store.getval(PropIdEnum.PidTagPstPassword).value)))[0]
+            self.PasswordCRC32Hash = panutils.unpack_integer('I', struct.pack(
+                'i', panutils.as_int(self.message_store.getval(PropIdEnum.PidTagPstPassword).value)))
         else:
             self.PasswordCRC32Hash = None
         self.root_entryid = EntryID(panutils.as_binary(self.message_store.getval(

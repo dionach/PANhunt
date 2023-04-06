@@ -224,7 +224,7 @@ class DirectoryEntry:
             'BB', directory_bytes[66:68])
         self.SiblingID, self.RightSiblingID, self.ChildID = struct.unpack(
             'III', directory_bytes[68:80])
-        self.CLSID = struct.unpack('16s', directory_bytes[80:96])[0]
+        self.CLSID = panutils.unpack_bytes('16s', directory_bytes[80:96])
         self.StateBits = panutils.unpack_integer('I', directory_bytes[96:100])
         creation_time_bytes, modified_time_bytes = struct.unpack(
             '8s8s', directory_bytes[100:116])
@@ -236,8 +236,8 @@ class DirectoryEntry:
             self.ModifiedTime = None
         else:
             self.ModifiedTime = panutils.bytes_to_time(modified_time_bytes)
-        self.StartingSectorLocation = struct.unpack(
-            'I', directory_bytes[116:120])[0]
+        self.StartingSectorLocation = panutils.unpack_integer(
+            'I', directory_bytes[116:120])
         self.StreamSize = panutils.unpack_integer(
             'Q', directory_bytes[120:128])
         if mscfb.MajorVersion == 3:
@@ -302,7 +302,7 @@ class MSCFB:
     MiniFATSectors: int
     FirstDIFATSectorLocation: int
     DIFATSectors: int
-    DIFAT: tuple
+    DIFAT: list[int]
 
     def __init__(self, cfb_file: _FilePathOrFileObject) -> None:
         """cfb_file is unicode or string filename or a file object"""
@@ -349,7 +349,7 @@ class MSCFB:
             'IIII', fd.read(16))
         self.MiniStreamCutoffSize, self.FirstMiniFATSectorLocation, self.MiniFATSectors, self.FirstDIFATSectorLocation, self.DIFATSectors = struct.unpack(
             'IIIII', fd.read(20))
-        self.DIFAT = struct.unpack('I' * 109, fd.read(436))
+        self.DIFAT = list(struct.unpack('I' * 109, fd.read(436)))
         self.validCFB = True
 
         if self.FirstDIFATSectorLocation != FAT.ENDOFCHAIN:
