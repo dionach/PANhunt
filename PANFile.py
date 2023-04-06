@@ -194,10 +194,8 @@ class PANFile:
         if attachment_ext in search_extensions['ZIP']:
             if attachment.BinaryData:
                 try:
-                    memory_zip = io.StringIO()
-                    # TODO: Check if utf-8 is okay or we need ascii
-                    memory_zip.write(attachment.BinaryData.decode('utf-8'))
-                    zip_file = zipfile.ZipFile(memory_zip.read())
+                    memory_zip = io.BytesIO(attachment.BinaryData)
+                    zip_file = zipfile.ZipFile(memory_zip)
                     self.check_zip_regexs(zf=zip_file,
                                           sub_path=os.path.join(
                                               sub_path, attachment.Filename),
@@ -234,10 +232,10 @@ class PANFile:
                     with io.BytesIO(zf.open(file_in_zip).read()) as memory_zip:
                         nested_zf = zipfile.ZipFile(memory_zip)
                         self.check_zip_regexs(zf=nested_zf,
-                                            sub_path=os.path.join(
+                                              sub_path=os.path.join(
                                                 sub_path, panutils.decode_zip_filename(file_in_zip)),
-                                            excluded_pans_list=excluded_pans_list,
-                                            search_extensions=search_extensions)
+                                              excluded_pans_list=excluded_pans_list,
+                                              search_extensions=search_extensions)
                 except RuntimeError:  # RuntimeError: # e.g. zip needs password
                     self.set_error(sys.exc_info()[1])
             # normal doc
