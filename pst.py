@@ -896,7 +896,8 @@ class PType:
                 value_bytes)
             s: list[str] = []
             for i in range(ulCount):
-                s.append(value_bytes[rgulDataOffsets[i]                         :rgulDataOffsets[i + 1]].decode('utf-16-le'))
+                s.append(value_bytes[rgulDataOffsets[i]
+                         :rgulDataOffsets[i + 1]].decode('utf-16-le'))
             return s
         if self.ptype == PTypeEnum.PtypMultipleString8:
             ulCount, rgulDataOffsets = self.get_multi_value_offsets(
@@ -1509,10 +1510,10 @@ class Folder:
             self.tc_contents = ltp.get_tc_by_nid(nid_contents)
             self.submessages = [SubMessage(self.tc_contents.RowIndex[RowIndex].nid,
                                            panutils.as_str(self.tc_contents.getval(
-                                               RowIndex, PropIdEnum.PidTagSentRepresentingNameW)),
+                                               RowIndex, PropIdEnum.PidTagSentRepresentingNameW) or "default"),
                                            ltp.strip_SubjectPrefix(
-                                               panutils.as_str(self.tc_contents.getval(RowIndex, PropIdEnum.PidTagSubjectW))),
-                                           panutils.filetime_bytes_to_datetime(panutils.as_binary(self.tc_contents.getval(RowIndex, PropIdEnum.PidTagClientSubmitTime))))
+                                               panutils.as_str(self.tc_contents.getval(RowIndex, PropIdEnum.PidTagSubjectW) or "default")),
+                                           panutils.as_datetime(self.tc_contents.getval(RowIndex, PropIdEnum.PidTagClientSubmitTime)))
                                 for RowIndex in range(len(self.tc_contents.RowIndex)) if RowIndex in list(self.tc_contents.RowIndex.keys())]
         except PSTException as e:
             log_error(e)
@@ -1594,6 +1595,11 @@ class Message:
     tc_recipients: Optional[TC]
     subrecipients: list[SubRecipient]
     subattachments: list[SubAttachment]
+    Body: Optional[str]
+    Read: bool
+    DisplayTo: str
+    XOriginatingIP: Optional[str]
+    TransportMessageHeaders: Optional[str]
 
     def __init__(self, nid: NID, ltp: LTP, nbd: Optional[NBD] = None, parent_message: Optional['Message'] = None, messaging: Optional['Messaging'] = None) -> None:
 
@@ -1621,33 +1627,49 @@ class Message:
             PropIdEnum.PidTagMessageClassW.value).value)
         self.Subject: str = ltp.strip_SubjectPrefix(
             panutils.as_str(self.pc.getval(PropIdEnum.PidTagSubjectW.value).value))
-        self.ClientSubmitTime: dt.datetime = panutils.filetime_bytes_to_datetime(panutils.as_binary(self.pc.getval(
-            PropIdEnum.PidTagClientSubmitTime.value).value))
+        self.ClientSubmitTime: dt.datetime = panutils.as_datetime(self.pc.getval(
+            PropIdEnum.PidTagClientSubmitTime.value).value)
         self.SentRepresentingName: str = panutils.as_str(self.pc.getval(
             PropIdEnum.PidTagSentRepresentingNameW.value).value)
         self.SenderName: str = panutils.as_str(self.pc.getval(
             PropIdEnum.PidTagSenderName.value).value)
         self.SenderSmtpAddress: str = panutils.as_str(self.pc.getval(
             PropIdEnum.PidTagSenderSmtpAddress.value).value)
-        self.MessageDeliveryTime: dt.datetime = panutils.filetime_bytes_to_datetime(panutils.as_binary(self.pc.getval(
-            PropIdEnum.PidTagMessageDeliveryTime.value).value))
+        self.MessageDeliveryTime: dt.datetime = panutils.as_datetime(self.pc.getval(
+            PropIdEnum.PidTagMessageDeliveryTime.value).value)
         self.MessageFlags: int = panutils.as_int(self.pc.getval(
             PropIdEnum.PidTagMessageFlags.value).value)
-        self.MessageStatus: int = panutils.as_int(self.pc.getval(
-            PropIdEnum.PidTagMessageStatus.value).value)
         self.HasAttachments: bool = (
             self.MessageFlags & Message.mfHasAttach == Message.mfHasAttach)
         self.MessageSize: int = panutils.as_int(self.pc.getval(
             PropIdEnum.PidTagMessageSize.value).value)
-        self.Body = panutils.as_str(
-            self.pc.getval(PropIdEnum.PidTagBody.value).value)
         self.Read = (self.MessageFlags & Message.mfRead == Message.mfRead)
-        self.TransportMessageHeaders = panutils.as_str(self.pc.getval(
-            PropIdEnum.PidTagTransportMessageHeaders.value).value)
         self.DisplayTo = panutils.as_str(
             self.pc.getval(PropIdEnum.PidTagDisplayToW.value).value)
-        self.XOriginatingIP = panutils.as_str(self.pc.getval(
-            PropIdEnum.PidTagXOriginatingIP.value).value)  # x-originating-ip
+
+        # If the message is a draft, then
+        # values below are null
+        ms = self.pc.getval(
+            PropIdEnum.PidTagMessageStatus.value)
+        if ms:
+            self.MessageStatus: int = panutils.as_int(
+                ms.value)
+
+        tmh = self.pc.getval(
+            PropIdEnum.PidTagTransportMessageHeaders.value)
+        if tmh:
+            self.TransportMessageHeaders = panutils.as_str(tmh.value)
+
+        # Body can be null in an email
+        b = self.pc.getval(PropIdEnum.PidTagBody.value)
+        if b:
+            self.Body = panutils.as_str(
+                b.value)
+        # Optional property
+        x = self.pc.getval(
+            PropIdEnum.PidTagXOriginatingIP.value)
+        if x:
+            self.XOriginatingIP = panutils.as_str(x.value)  # x-originating-ip
 
         self.tc_attachments = None
         self.tc_recipients = None
