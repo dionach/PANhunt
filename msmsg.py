@@ -46,7 +46,7 @@ class FAT:
     FREESECT = 0xFFFFFFFF
 
     mscfb: 'MSCFB'
-    entries: list[bytes]
+    entries: list[int]
 
     def __init__(self, mscfb: 'MSCFB') -> None:
 
@@ -56,8 +56,8 @@ class FAT:
         while mscfb.DIFAT[difat_index] != FAT.FREESECT:
             sector = mscfb.DIFAT[difat_index]
             sector_bytes: bytes = mscfb.get_sector_bytes(sector)
-            sector_fat_entries = struct.unpack(
-                'I' * int(mscfb.SectorSize / 4), sector_bytes)
+            format: str = 'I' * (mscfb.SectorSize // 4)
+            sector_fat_entries = struct.unpack(format, sector_bytes)
             self.entries.extend(sector_fat_entries)
             difat_index += 1
 
@@ -66,7 +66,7 @@ class FAT:
         stream_bytes: bytes = b''
         while sector != FAT.ENDOFCHAIN:
             stream_bytes += self.mscfb.get_sector_bytes(sector)
-            sector += len(self.entries[sector])
+            sector = self.entries[sector]
         # if size != 0:
         if size > len(stream_bytes) or size < len(stream_bytes) - self.mscfb.SectorSize:
             raise MSGException(
@@ -77,7 +77,7 @@ class FAT:
 
     def __str__(self) -> str:
 
-        return ', '.join([f"{hex(sector)}:{entry.hex()}" for sector, entry in zip(list(range(len(self.entries))), self.entries)])
+        return ', '.join([f"{hex(sector)}:{hex(entry)}" for sector, entry in zip(list(range(len(self.entries))), self.entries)])
 
 
 class MiniFAT:
@@ -142,7 +142,7 @@ class Directory:
         sector: int = start_sector
         while sector != FAT.ENDOFCHAIN:
             entries.extend(self.get_directory_sector(sector))
-            sector += int(self.mscfb.fat.entries[sector])
+            sector = self.mscfb.fat.entries[sector]
         return entries
 
     def set_entry_children(self, dir_entry: 'DirectoryEntry') -> None:
@@ -152,7 +152,8 @@ class Directory:
         if dir_entry.ChildID != DirectoryEntry.NOSTREAM:
             child_ids_queue.append(dir_entry.ChildID)
             while child_ids_queue:
-                child_entry: DirectoryEntry = self.entries[child_ids_queue.pop()]
+                child_entry: DirectoryEntry = self.entries[child_ids_queue.pop(
+                )]
                 if child_entry.Name in list(dir_entry.children.keys()):
                     raise MSGException(
                         'Directory Entry Name already in children dictionary')
@@ -198,7 +199,6 @@ class DirectoryEntry:
     StateBits: int
     CreationTime: Optional[datetime]
     ModifiedTime: Optional[datetime]
-    NameLength: int
     StreamSize: int
     StartingSectorLocation: int
     stream_data: bytes
@@ -213,12 +213,12 @@ class DirectoryEntry:
             return
 
         self.mscfb = mscfb
-        self.NameLength = panutils.unpack_integer('H', directory_bytes[64:66])
-        if self.NameLength > 64:
+        nameLength: int = panutils.unpack_integer('H', directory_bytes[64:66])
+        if nameLength > 64:
             # raise MSGException('Directory Entry name cannot be longer than 64')
             print('Directory Entry name cannot be longer than 64')
             return
-        self.Name: str = directory_bytes[:self.NameLength -
+        self.Name: str = directory_bytes[:nameLength -
                                          2].decode('utf-16-le')
         self.ObjectType, self.ColorFlag = struct.unpack(
             'BB', directory_bytes[66:68])
