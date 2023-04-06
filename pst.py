@@ -896,7 +896,8 @@ class PType:
                 value_bytes)
             s: list[str] = []
             for i in range(ulCount):
-                s.append(value_bytes[rgulDataOffsets[i]:rgulDataOffsets[i + 1]].decode('utf-16-le'))
+                s.append(value_bytes[rgulDataOffsets[i]
+                         :rgulDataOffsets[i + 1]].decode('utf-16-le'))
             return s
         if self.ptype == PTypeEnum.PtypMultipleString8:
             ulCount, rgulDataOffsets = self.get_multi_value_offsets(
@@ -2303,6 +2304,16 @@ class PST:
     def __init__(self, pst_file: str) -> None:
 
         self.fd = open(pst_file, 'rb')
+
+        # If PST file is open in Outlook, it is locked
+        try:
+            self.fd.seek(0)
+            self.fd.readline()
+        except PermissionError:
+            self.fd.close()
+            raise PSTException(
+                f'The PST file is in use (probably by Outlook application).')
+
         self.header = Header(self.fd)
         if not self.header.validPST:
             raise PSTException('PST file is not a valid PST')
