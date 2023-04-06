@@ -231,16 +231,13 @@ class PANFile:
             # nested zip file
             if panutils.get_ext(file_in_zip) in search_extensions['ZIP']:
                 try:
-                    memory_zip = io.StringIO()
-                    memory_zip.write(panutils.decode_zip_text(
-                        zf.open(file_in_zip).read()))
-                    nested_zf = zipfile.ZipFile(memory_zip.read())
-                    self.check_zip_regexs(zf=nested_zf,
-                                          sub_path=os.path.join(
-                                              sub_path, panutils.decode_zip_filename(file_in_zip)),
-                                          excluded_pans_list=excluded_pans_list,
-                                          search_extensions=search_extensions)
-                    memory_zip.close()
+                    with io.BytesIO(zf.open(file_in_zip).read()) as memory_zip:
+                        nested_zf = zipfile.ZipFile(memory_zip)
+                        self.check_zip_regexs(zf=nested_zf,
+                                            sub_path=os.path.join(
+                                                sub_path, panutils.decode_zip_filename(file_in_zip)),
+                                            excluded_pans_list=excluded_pans_list,
+                                            search_extensions=search_extensions)
                 except RuntimeError:  # RuntimeError: # e.g. zip needs password
                     self.set_error(sys.exc_info()[1])
             # normal doc

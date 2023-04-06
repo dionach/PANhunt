@@ -31,10 +31,10 @@ def decode_zip_filename(filename: str | bytes) -> Any:
 
 def decode_zip_text(instr: str | bytes) -> str:
 
-    if isinstance(instr, str):
+    if isinstance(instr, bytes):
+        return instr.decode('cp437')
+    elif isinstance(instr, str):
         return instr
-    elif isinstance(instr, bytes):
-        return instr.decode('utf-8')
     else:
         raise ValueError()
 
