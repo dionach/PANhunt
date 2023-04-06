@@ -896,8 +896,7 @@ class PType:
                 value_bytes)
             s: list[str] = []
             for i in range(ulCount):
-                s.append(value_bytes[rgulDataOffsets[i]
-                         :rgulDataOffsets[i + 1]].decode('utf-16-le'))
+                s.append(value_bytes[rgulDataOffsets[i]                         :rgulDataOffsets[i + 1]].decode('utf-16-le'))
             return s
         if self.ptype == PTypeEnum.PtypMultipleString8:
             ulCount, rgulDataOffsets = self.get_multi_value_offsets(
@@ -1061,7 +1060,7 @@ class PC:  # Property Context
 
     hn: HN
     bth: BTH
-    properties: dict[PropIdEnum, PCBTHData]
+    properties: dict[int, PCBTHData]
 
     def __init__(self, hn: HN) -> None:
 
@@ -1078,19 +1077,19 @@ class PC:  # Property Context
         for bth_data in self.bth.bth_data_list:
             if isinstance(bth_data, BTHData):
                 pc_property: PCBTHData = PCBTHData(bth_data, hn)
-                if pc_property.wPropId in (PropIdEnum.PidTagFinderEntryId, PropIdEnum.PidTagIpmSubTreeEntryId, PropIdEnum.PidTagIpmWastebasketEntryId, PropIdEnum.PidTagEntryID):
+                if pc_property.wPropId in (PropIdEnum.PidTagFinderEntryId.value, PropIdEnum.PidTagIpmSubTreeEntryId.value, PropIdEnum.PidTagIpmWastebasketEntryId.value, PropIdEnum.PidTagEntryID.value):
                     # TODO: Solve EntryID issue
                     entryId = EntryID(
                         panutils.as_binary(pc_property.value))
                     pc_property.value = entryId
                 self.properties[pc_property.wPropId] = pc_property
 
-    def getval(self, propid: PropIdEnum) -> PCBTHData:
+    def getval(self, propid: int) -> PCBTHData:
 
         if propid in self.properties:
             return self.properties[propid]
 
-        raise IndexError("Invalid propid %s" % propid)
+        raise IndexError(f'Invalid propid {propid}')
 
     def __repr__(self) -> str:
 
@@ -1466,7 +1465,7 @@ class Folder:
             raise PSTException('Invalid Folder NID Type: %s' % nid.nidType)
         self.pc = ltp.get_pc_by_nid(nid)
         self.DisplayName = panutils.as_str(self.pc.getval(
-            PropIdEnum.PidTagDisplayName).value)
+            PropIdEnum.PidTagDisplayName.value).value)
         self.path = parent_path + '\\' + self.DisplayName
 
         # print('FOLDER DEBUG', self.DisplayName, self.pc)
@@ -1477,11 +1476,11 @@ class Folder:
                 messaging.store_record_key + struct.pack('I', nid.nid)
 
         self.ContentCount = panutils.as_int(self.pc.getval(
-            PropIdEnum.PidTagContentCount).value)
+            PropIdEnum.PidTagContentCount.value).value)
         self.ContainerClass = panutils.as_str(self.pc.getval(
-            PropIdEnum.PidTagContainerClass).value)
+            PropIdEnum.PidTagContainerClass.value).value)
         self.HasSubfolders = panutils.as_int(self.pc.getval(
-            PropIdEnum.PidTagSubfolders).value) == 1
+            PropIdEnum.PidTagSubfolders.value).value) == 1
 
         nid_hierarchy: NID = NID(nid.nidIndex | NID.NID_TYPE_HIERARCHY_TABLE)
         nid_contents: NID = NID(nid.nidIndex | NID.NID_TYPE_CONTENTS_TABLE)
@@ -1612,36 +1611,36 @@ class Message:
                 messaging.store_record_key + struct.pack('I', nid.nid)
 
         self.MessageClass: str = panutils.as_str(self.pc.getval(
-            PropIdEnum.PidTagMessageClassW).value)
+            PropIdEnum.PidTagMessageClassW.value).value)
         self.Subject: str = ltp.strip_SubjectPrefix(
-            panutils.as_str(self.pc.getval(PropIdEnum.PidTagSubjectW).value))
+            panutils.as_str(self.pc.getval(PropIdEnum.PidTagSubjectW.value).value))
         self.ClientSubmitTime: dt.datetime = panutils.filetime_bytes_to_datetime(panutils.as_binary(self.pc.getval(
-            PropIdEnum.PidTagClientSubmitTime).value))
+            PropIdEnum.PidTagClientSubmitTime.value).value))
         self.SentRepresentingName: str = panutils.as_str(self.pc.getval(
-            PropIdEnum.PidTagSentRepresentingNameW).value)
+            PropIdEnum.PidTagSentRepresentingNameW.value).value)
         self.SenderName: str = panutils.as_str(self.pc.getval(
-            PropIdEnum.PidTagSenderName).value)
+            PropIdEnum.PidTagSenderName.value).value)
         self.SenderSmtpAddress: str = panutils.as_str(self.pc.getval(
-            PropIdEnum.PidTagSenderSmtpAddress).value)
+            PropIdEnum.PidTagSenderSmtpAddress.value).value)
         self.MessageDeliveryTime: dt.datetime = panutils.filetime_bytes_to_datetime(panutils.as_binary(self.pc.getval(
-            PropIdEnum.PidTagMessageDeliveryTime).value))
+            PropIdEnum.PidTagMessageDeliveryTime.value).value))
         self.MessageFlags: int = panutils.as_int(self.pc.getval(
-            PropIdEnum.PidTagMessageFlags).value)
+            PropIdEnum.PidTagMessageFlags.value).value)
         self.MessageStatus: int = panutils.as_int(self.pc.getval(
-            PropIdEnum.PidTagMessageStatus).value)
+            PropIdEnum.PidTagMessageStatus.value).value)
         self.HasAttachments: bool = (
             self.MessageFlags & Message.mfHasAttach == Message.mfHasAttach)
         self.MessageSize: int = panutils.as_int(self.pc.getval(
-            PropIdEnum.PidTagMessageSize).value)
+            PropIdEnum.PidTagMessageSize.value).value)
         self.Body = panutils.as_str(
-            self.pc.getval(PropIdEnum.PidTagBody).value)
+            self.pc.getval(PropIdEnum.PidTagBody.value).value)
         self.Read = (self.MessageFlags & Message.mfRead == Message.mfRead)
         self.TransportMessageHeaders = panutils.as_str(self.pc.getval(
-            PropIdEnum.PidTagTransportMessageHeaders).value)
+            PropIdEnum.PidTagTransportMessageHeaders.value).value)
         self.DisplayTo = panutils.as_str(
-            self.pc.getval(PropIdEnum.PidTagDisplayToW).value)
+            self.pc.getval(PropIdEnum.PidTagDisplayToW.value).value)
         self.XOriginatingIP = panutils.as_str(self.pc.getval(
-            PropIdEnum.PidTagXOriginatingIP).value)  # x-originating-ip
+            PropIdEnum.PidTagXOriginatingIP.value).value)  # x-originating-ip
 
         self.tc_attachments = None
         self.tc_recipients = None
@@ -1716,15 +1715,15 @@ class Attachment:
         self.pc = self.ltp.get_pc_by_slentry(slentry)
 
         self.DisplayName = panutils.as_str(
-            self.pc.getval(PropIdEnum.PidTagDisplayName).value)
+            self.pc.getval(PropIdEnum.PidTagDisplayName.value).value)
         self.AttachMethod = panutils.as_int(
-            self.pc.getval(PropIdEnum.PidTagAttachMethod).value)
+            self.pc.getval(PropIdEnum.PidTagAttachMethod.value).value)
         self.AttachmentSize = panutils.as_int(
-            self.pc.getval(PropIdEnum.PidTagAttachmentSize).value)
+            self.pc.getval(PropIdEnum.PidTagAttachmentSize.value).value)
         self.AttachFilename = panutils.as_str(self.pc.getval(
-            PropIdEnum.PidTagAttachFilename).value)  # 8.3 short name
+            PropIdEnum.PidTagAttachFilename.value).value)  # 8.3 short name
         self.AttachLongFilename = panutils.as_str(self.pc.getval(
-            PropIdEnum.PidTagAttachLongFilename).value)
+            PropIdEnum.PidTagAttachLongFilename.value).value)
         if self.AttachLongFilename:
             self.Filename = self.AttachLongFilename
         else:
@@ -1736,15 +1735,15 @@ class Attachment:
 
         if self.AttachMethod == Message.afByValue:
             self.BinaryData = panutils.as_binary(self.pc.getval(
-                PropIdEnum.PidTagAttachDataBinary).value)
+                PropIdEnum.PidTagAttachDataBinary.value).value)
         else:
             self.BinaryData = panutils.as_binary(self.pc.getval(
-                PropIdEnum.PidTagAttachDataObject).value)
+                PropIdEnum.PidTagAttachDataObject.value).value)
             # raise PSTException('Unsupported Attachment Method %s' % self.AttachMethod)
         self.AttachMimeTag = panutils.as_str(
-            self.pc.getval(PropIdEnum.PidTagAttachMimeTag).value)
+            self.pc.getval(PropIdEnum.PidTagAttachMimeTag.value).value)
         self.AttachExtension = panutils.as_str(
-            self.pc.getval(PropIdEnum.PidTagAttachExtension).value)
+            self.pc.getval(PropIdEnum.PidTagAttachExtension.value).value)
 
     def get_all_properties(self) -> str:
 
@@ -1803,17 +1802,17 @@ class Messaging:
 
         self.message_store = self.ltp.get_pc_by_nid(NID(NID.NID_MESSAGE_STORE))
         self.store_record_key = panutils.as_binary(self.message_store.getval(
-            PropIdEnum.PidTagRecordKey).value)  # binary
+            PropIdEnum.PidTagRecordKey.value).value)  # binary
 
-        if PropIdEnum.PidTagPstPassword in self.message_store.properties.keys():
+        if PropIdEnum.PidTagPstPassword.value in self.message_store.properties.keys():
             self.PasswordCRC32Hash = panutils.unpack_integer('I', struct.pack(
-                'i', panutils.as_int(self.message_store.getval(PropIdEnum.PidTagPstPassword).value)))
+                'i', panutils.as_int(self.message_store.getval(PropIdEnum.PidTagPstPassword.value).value)))
         else:
             self.PasswordCRC32Hash = None
         self.root_entryid = EntryID(panutils.as_binary(self.message_store.getval(
-            PropIdEnum.PidTagIpmSubTreeEntryId).value))
+            PropIdEnum.PidTagIpmSubTreeEntryId.value).value))
         self.deleted_items_entryid: bytes = panutils.as_binary(self.message_store.getval(
-            PropIdEnum.PidTagIpmWastebasketEntryId).value)
+            PropIdEnum.PidTagIpmWastebasketEntryId.value).value)
 
     def set_name_to_id_map(self) -> None:
 
@@ -1822,14 +1821,14 @@ class Messaging:
             NID(NID.NID_NAME_TO_ID_MAP))
 
         nameid_entrystream: bytes = panutils.as_binary(self.pc_name_to_id_map.getval(
-            PropIdEnum.PidTagNameidStreamEntry).value)
+            PropIdEnum.PidTagNameidStreamEntry.value).value)
         if nameid_entrystream:
             self.nameid_entries = [NAMEID(nameid_entrystream[i * 8:(i + 1) * 8])
                                    for i in range(len(nameid_entrystream) // 8)]
             nameid_stringstream: bytes = panutils.as_binary(self.pc_name_to_id_map.getval(
-                PropIdEnum.PidTagNameidStreamString).value)
+                PropIdEnum.PidTagNameidStreamString.value).value)
             nameid_guidstream: bytes = panutils.as_binary(self.pc_name_to_id_map.getval(
-                PropIdEnum.PidTagNameidStreamGuid).value)
+                PropIdEnum.PidTagNameidStreamGuid.value).value)
             if nameid_stringstream and nameid_guidstream:
 
                 for nameid in self.nameid_entries:
@@ -2437,7 +2436,7 @@ class PST:
     def get_pst_status(self) -> str:
 
         status: str = 'Valid PST: %s, Unicode: %s, CryptMethod: %s, Name: %s, Password: %s' % (
-            self.header.validPST, self.header.is_unicode, self.header.bCryptMethod, panutils.as_str(self.messaging.message_store.getval(PropIdEnum.PidTagDisplayName).value), self.messaging.PasswordCRC32Hash)
+            self.header.validPST, self.header.is_unicode, self.header.bCryptMethod, panutils.as_str(self.messaging.message_store.getval(PropIdEnum.PidTagDisplayName.value).value), self.messaging.PasswordCRC32Hash)
         return status
 
     @staticmethod
