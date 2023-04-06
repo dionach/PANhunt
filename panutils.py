@@ -19,7 +19,7 @@ def bytes_to_time(datetime_bytes: bytes) -> dt.datetime:
 
 
 def to_zeropaddedhex(value, fixed_length: int) -> str:
-    return f"{value:0{fixed_length}x}"
+    return f"{value:0{fixed_length}x}".upper()
 
 
 def decode_zip_filename(filename: str | bytes) -> Any:

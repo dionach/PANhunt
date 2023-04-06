@@ -777,7 +777,7 @@ class BTH:
 
 
 class PCBTHData:
-    wPropId: Optional['PropIdEnum']
+    wPropId: int
     wPropType: int
     dwValueHnid: bytes
     value: _ValueType
@@ -787,10 +787,8 @@ class PCBTHData:
     def __init__(self, bth_data: BTHData, hn: HN) -> None:
 
         i: int = panutils.unpack_integer('H', bth_data.key)
-        try:
-            self.wPropId = PropIdEnum(i)
-        except:
-            self.wPropId = None
+        self.wPropId = i
+
         wPropType: int
         dwValueHnid: bytes
         wPropType, dwValueHnid = struct.unpack('H4s', bth_data.data)
@@ -823,7 +821,7 @@ class PCBTHData:
 
     def __repr__(self) -> str:
 
-        return '%s (%s) = %s' % (hex(self.wPropId.value), hex(self.wPropType), repr(self.value))
+        return '%s (%s) = %s' % (hex(self.wPropId), hex(self.wPropType), repr(self.value))
 
 
 class PType:
@@ -2594,7 +2592,7 @@ if __name__ == "__main__":
             print('Output folder does not exist')
             sys.exit(1)
 
-        test_dump_pst(input_pst_file, output_folder)
+        # test_dump_pst(input_pst_file, output_folder)
 
     else:  # debug
 

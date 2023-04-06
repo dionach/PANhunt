@@ -387,7 +387,7 @@ class PropertyStream:
     EMBEDDED_MSG_HEADER_SIZE: int = 24
 
     msmsg: 'MSMSG'
-    properties: dict[PropIdEnum, 'PropertyEntry']
+    properties: dict[int, 'PropertyEntry']
     NextRecipientID: int
     NextAttachmentID: int
     RecipientCount: int
@@ -415,15 +415,13 @@ class PropertyStream:
                 if prop_entry in self.properties.values():
                     raise MSGException(
                         'PropertyID already in properties dictionary')
-                self.properties[PropIdEnum(
-                    prop_entry.PropertyID)] = prop_entry
+                self.properties[prop_entry.PropertyID] = prop_entry
 
-    def get_value(self, prop_id: PropIdEnum) -> 'PropertyEntry':
+    def get_value(self, prop_id: int) -> 'PropertyEntry': # type: ignore
 
         if prop_id in self.properties:
             return self.properties[prop_id]
-
-        raise IndexError('prop_id')
+        # raise IndexError('prop_id')
 
     def __str__(self) -> str:
         return '\n'.join([str(prop) for prop in list(self.properties.values())])
@@ -505,17 +503,17 @@ class Recipient:
     def __init__(self, prop_stream: PropertyStream) -> None:
 
         self.RecipientType = panutils.as_int(prop_stream.get_value(
-            PropIdEnum.PidTagRecipientType).value)
+            PropIdEnum.PidTagRecipientType.value).value)
         self.DisplayName = panutils.as_str(prop_stream.get_value(
-            PropIdEnum.PidTagDisplayName).value)
+            PropIdEnum.PidTagDisplayName.value).value)
         self.ObjectType = panutils.as_int(prop_stream.get_value(
-            PropIdEnum.PidTagObjectType).value)
+            PropIdEnum.PidTagObjectType.value).value)
         self.AddressType = panutils.as_str(prop_stream.get_value(
-            PropIdEnum.PidTagAddressType).value)
+            PropIdEnum.PidTagAddressType.value).value)
         self.EmailAddress = panutils.as_str(prop_stream.get_value(
-            PropIdEnum.PidTagEmailAddress).value)
+            PropIdEnum.PidTagEmailAddress.value).value)
         self.DisplayType = panutils.as_int(prop_stream.get_value(
-            PropIdEnum.PidTagDisplayType).value)
+            PropIdEnum.PidTagDisplayType.value).value)
 
     def __str__(self) -> str:
         return f"{self.DisplayName} ({self.EmailAddress})"
@@ -535,15 +533,15 @@ class Attachment:
     def __init__(self, prop_stream: PropertyStream) -> None:
 
         self.DisplayName = panutils.as_str(prop_stream.get_value(
-            PropIdEnum.PidTagDisplayName).value)
+            PropIdEnum.PidTagDisplayName.value).value)
         self.AttachMethod = panutils.as_int(prop_stream.get_value(
-            PropIdEnum.PidTagAttachMethod).value)
+            PropIdEnum.PidTagAttachMethod.value).value)
         self.AttachmentSize = panutils.as_int(prop_stream.get_value(
-            PropIdEnum.PidTagAttachmentSize).value)
+            PropIdEnum.PidTagAttachmentSize.value).value)
         self.AttachFilename = panutils.as_str(prop_stream.get_value(
-            PropIdEnum.PidTagAttachFilename).value)
+            PropIdEnum.PidTagAttachFilename.value).value)
         self.AttachLongFilename = panutils.as_str(prop_stream.get_value(
-            PropIdEnum.PidTagAttachLongFilename).value)
+            PropIdEnum.PidTagAttachLongFilename.value).value)
         if self.AttachLongFilename:
             self.Filename = self.AttachLongFilename
         else:
@@ -553,11 +551,11 @@ class Attachment:
         else:
             self.Filename = f'[NoFilename_Method{self.AttachMethod}]'
         self.BinaryData = panutils.as_binary(prop_stream.get_value(
-            PropIdEnum.PidTagAttachDataBinary).value)
+            PropIdEnum.PidTagAttachDataBinary.value).value)
         self.AttachMimeTag = panutils.as_str(prop_stream.get_value(
-            PropIdEnum.PidTagAttachMimeTag).value)
+            PropIdEnum.PidTagAttachMimeTag.value).value)
         self.AttachExtension = panutils.as_str(prop_stream.get_value(
-            PropIdEnum.PidTagAttachExtension).value)
+            PropIdEnum.PidTagAttachExtension.value).value)
 
     def __str__(self) -> str:
 
@@ -606,33 +604,33 @@ class MSMSG:
     def set_common_properties(self) -> None:
 
         self.Subject = panutils.as_str(self.prop_stream.get_value(
-            PropIdEnum.PidTagSubjectW).value)
+            PropIdEnum.PidTagSubjectW.value).value)
         self.ClientSubmitTime = panutils.as_datetime(self.prop_stream.get_value(
-            PropIdEnum.PidTagClientSubmitTime).value)
+            PropIdEnum.PidTagClientSubmitTime.value).value)
         self.SentRepresentingName = panutils.as_str(self.prop_stream.get_value(
-            PropIdEnum.PidTagSentRepresentingNameW).value)
+            PropIdEnum.PidTagSentRepresentingNameW.value).value)
         self.SenderName = panutils.as_str(self.prop_stream.get_value(
-            PropIdEnum.PidTagSenderName).value)
+            PropIdEnum.PidTagSenderName.value).value)
         self.SenderSmtpAddress = panutils.as_str(self.prop_stream.get_value(
-            PropIdEnum.PidTagSenderSmtpAddress).value)
+            PropIdEnum.PidTagSenderSmtpAddress.value).value)
         self.MessageDeliveryTime = panutils.as_datetime(self.prop_stream.get_value(
-            PropIdEnum.PidTagMessageDeliveryTime).value)
+            PropIdEnum.PidTagMessageDeliveryTime.value).value)
         self.MessageFlags = panutils.as_int(self.prop_stream.get_value(
-            PropIdEnum.PidTagMessageFlags).value)
+            PropIdEnum.PidTagMessageFlags.value).value)
         self.MessageStatus = panutils.as_int(self.prop_stream.get_value(
-            PropIdEnum.PidTagMessageStatus).value)
+            PropIdEnum.PidTagMessageStatus.value).value)
         # self.HasAttachments  = (self.MessageFlags & Message.mfHasAttach == Message.mfHasAttach)
         self.MessageSize = panutils.as_int(self.prop_stream.get_value(
-            PropIdEnum.PidTagMessageSize).value)
+            PropIdEnum.PidTagMessageSize.value).value)
         self.Body = panutils.as_str(self.prop_stream.get_value(
-            PropIdEnum.PidTagBody).value)
+            PropIdEnum.PidTagBody.value).value)
         # self.Read = (self.MessageFlags & Message.mfRead == Message.mfRead)
         self.TransportMessageHeaders = panutils.as_str(self.prop_stream.get_value(
-            PropIdEnum.PidTagTransportMessageHeaders).value)
+            PropIdEnum.PidTagTransportMessageHeaders.value).value)
         self.DisplayTo = panutils.as_str(self.prop_stream.get_value(
-            PropIdEnum.PidTagDisplayToW).value)
+            PropIdEnum.PidTagDisplayToW.value).value)
         self.XOriginatingIP = panutils.as_str(self.prop_stream.get_value(
-            PropIdEnum.PidTagXOriginatingIp).value)  # x-originating-ip
+            PropIdEnum.PidTagXOriginatingIp.value).value)  # x-originating-ip
 
     def set_recipients(self) -> None:
 
