@@ -1212,7 +1212,9 @@ class TC:  # Table Context
                 if isinstance(self.hnidRows, HID):
                     row_matrix_data = [self.hn.get_hid_data(
                         self.hnidRows)]  # block data list
-                raise TypeError()
+                else:
+                    raise TypeError(
+                        f'Expected type "HID" got "{type(self.hnidRows)}". \nValue: {self.hnidRows!r}')
             else:
                 if isinstance(self.hnidRows, NID):
                     if self.hn.subnodes and self.hnidRows.nid in list(self.hn.subnodes.keys()):
