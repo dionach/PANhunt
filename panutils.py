@@ -91,28 +91,29 @@ def unpack_bytes(format: str, buffer: bytes) -> bytes:
         raise ArgumentError(format, buffer)
 
 
-def as_binary(value: _ValueType) -> bytes:
+# Casting
+def as_binary(value: Any) -> bytes:
     if isinstance(value, bytes):
         return value
     raise TypeError(
         f'Expected type "bytes" got "{type(value)}". \nValue: {value!r}')
 
 
-def as_str(value: _ValueType) -> str:
+def as_str(value: Any) -> str:
     if isinstance(value, str):
         return value
     raise TypeError(
         f'Expected type "str" got "{type(value)}". \nValue: {value!r}')
 
 
-def as_int(value: _ValueType) -> int:
+def as_int(value: Any) -> int:
     if isinstance(value, int):
         return value
     raise TypeError(
         f'Expected type "int" got "{type(value)}". \nValue: {value!r}')
 
 
-def as_datetime(value: _ValueType) -> dt.datetime:
+def as_datetime(value: Any) -> dt.datetime:
     if isinstance(value, dt.datetime):
         return value
     raise TypeError(

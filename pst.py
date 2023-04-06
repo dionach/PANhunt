@@ -780,7 +780,7 @@ class PCBTHData:
     wPropId: int
     wPropType: int
     dwValueHnid: bytes
-    value: _ValueType
+    value: _ValueType | 'EntryID'
     hid: HID
     subnode_nid: NID
 
@@ -1078,18 +1078,18 @@ class PC:  # Property Context
             if isinstance(bth_data, BTHData):
                 pc_property: PCBTHData = PCBTHData(bth_data, hn)
                 if pc_property.wPropId in (PropIdEnum.PidTagFinderEntryId.value, PropIdEnum.PidTagIpmSubTreeEntryId.value, PropIdEnum.PidTagIpmWastebasketEntryId.value, PropIdEnum.PidTagEntryID.value):
-                    # TODO: Solve EntryID issue
                     entryId = EntryID(
                         panutils.as_binary(pc_property.value))
                     pc_property.value = entryId
                 self.properties[pc_property.wPropId] = pc_property
 
-    def getval(self, propid: int) -> PCBTHData:
+    # TODO: Use Optional
+    def getval(self, propid: int) -> PCBTHData:  # type: ignore
 
         if propid in self.properties:
             return self.properties[propid]
 
-        raise IndexError(f'Invalid propid {propid}')
+        # raise IndexError(f'Invalid propid {propid}')
 
     def __repr__(self) -> str:
 
@@ -1477,8 +1477,13 @@ class Folder:
 
         self.ContentCount = panutils.as_int(self.pc.getval(
             PropIdEnum.PidTagContentCount.value).value)
-        self.ContainerClass = panutils.as_str(self.pc.getval(
-            PropIdEnum.PidTagContainerClass.value).value)
+
+        cc = self.pc.getval(
+            PropIdEnum.PidTagContainerClass.value)
+        if cc:
+            ccv = cc.value
+            self.ContainerClass = panutils.as_str(ccv)
+
         self.HasSubfolders = panutils.as_int(self.pc.getval(
             PropIdEnum.PidTagSubfolders.value).value) == 1
 
@@ -1788,6 +1793,7 @@ class Messaging:
     message_store: PC
     store_record_key: bytes
     root_entryid: EntryID
+    deleted_items_entryid: EntryID
 
     def __init__(self, ltp: LTP) -> None:
 
@@ -1809,10 +1815,16 @@ class Messaging:
                 'i', panutils.as_int(self.message_store.getval(PropIdEnum.PidTagPstPassword.value).value)))
         else:
             self.PasswordCRC32Hash = None
-        self.root_entryid = EntryID(panutils.as_binary(self.message_store.getval(
-            PropIdEnum.PidTagIpmSubTreeEntryId.value).value))
-        self.deleted_items_entryid: bytes = panutils.as_binary(self.message_store.getval(
-            PropIdEnum.PidTagIpmWastebasketEntryId.value).value)
+
+        root_entryid_value = self.message_store.getval(
+            PropIdEnum.PidTagIpmSubTreeEntryId.value).value
+        if isinstance(root_entryid_value, EntryID):
+            self.root_entryid = root_entryid_value
+
+        deleted_items_entryid_value = self.message_store.getval(
+            PropIdEnum.PidTagIpmWastebasketEntryId.value).value
+        if isinstance(deleted_items_entryid_value, EntryID):
+            self.deleted_items_entryid = deleted_items_entryid_value
 
     def set_name_to_id_map(self) -> None:
 
