@@ -1150,7 +1150,7 @@ class TC:  # Table Context
     rgTCOLDESC: list[TCOLDESC]
     hidIndex: bytes
     RowIndex: dict[int, TCROWID]
-    RowMatrix: dict[PropIdEnum, dict[int, _ValueType]]
+    RowMatrix: dict[int, dict[int, _ValueType]]
 
     def __init__(self, hn: HN) -> None:
 
@@ -1250,7 +1250,7 @@ class TC:  # Table Context
                             'Property ID %s already in row data' % hex(tcoldesc.wPropId))
                     rowvals[tcoldesc.wPropId] = self.get_row_cell_value(
                         data_bytes, tcoldesc)
-                self.RowMatrix[PropIdEnum(dwRowID)] = rowvals  # row_datas
+                self.RowMatrix[dwRowID] = rowvals  # row_datas
 
     def get_row_cell_value(self, data_bytes: Optional[bytes], tcoldesc: TCOLDESC) -> _ValueType:
 
@@ -1290,7 +1290,7 @@ class TC:  # Table Context
 
         dwRowID: int = self.get_row_ID(RowIndex)
         rowvals: dict[int,
-                      _ValueType] = self.RowMatrix[PropIdEnum(dwRowID)]
+                      _ValueType] = self.RowMatrix[dwRowID]
         if wPropId.value in rowvals.keys():
             return rowvals[wPropId.value]
         return None
@@ -1300,7 +1300,7 @@ class TC:  # Table Context
         s: str = 'TC Rows: %s, %s\n' % (len(self.RowIndex), self.hn)
         s += 'Columns: ' + \
             ''.join([' %s' % tcoldesc for tcoldesc in self.rgTCOLDESC])
-        s += '\nData:\n' + '\n'.join(['%s: %s' % (hex(dwRowID.value), rowvals)
+        s += '\nData:\n' + '\n'.join(['%s: %s' % (hex(dwRowID), rowvals)
                                      for dwRowID, rowvals in list(self.RowMatrix.items())])
         return s
 
