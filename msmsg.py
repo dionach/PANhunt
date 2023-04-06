@@ -417,7 +417,7 @@ class PropertyStream:
                         'PropertyID already in properties dictionary')
                 self.properties[prop_entry.PropertyID] = prop_entry
 
-    def get_value(self, prop_id: int) -> 'PropertyEntry': # type: ignore
+    def get_value(self, prop_id: int) -> 'PropertyEntry':  # type: ignore
 
         if prop_id in self.properties:
             return self.properties[prop_id]
@@ -536,8 +536,6 @@ class Attachment:
             PropIdEnum.PidTagDisplayName.value).value)
         self.AttachMethod = panutils.as_int(prop_stream.get_value(
             PropIdEnum.PidTagAttachMethod.value).value)
-        self.AttachmentSize = panutils.as_int(prop_stream.get_value(
-            PropIdEnum.PidTagAttachmentSize.value).value)
         self.AttachFilename = panutils.as_str(prop_stream.get_value(
             PropIdEnum.PidTagAttachFilename.value).value)
         self.AttachLongFilename = panutils.as_str(prop_stream.get_value(
@@ -552,10 +550,18 @@ class Attachment:
             self.Filename = f'[NoFilename_Method{self.AttachMethod}]'
         self.BinaryData = panutils.as_binary(prop_stream.get_value(
             PropIdEnum.PidTagAttachDataBinary.value).value)
-        self.AttachMimeTag = panutils.as_str(prop_stream.get_value(
-            PropIdEnum.PidTagAttachMimeTag.value).value)
         self.AttachExtension = panutils.as_str(prop_stream.get_value(
             PropIdEnum.PidTagAttachExtension.value).value)
+        # If the msg file is from a draft, then
+        # values below are null
+        sz: Optional[PropertyEntry] = prop_stream.get_value(
+            PropIdEnum.PidTagAttachmentSize.value)
+        if sz:
+            self.AttachmentSize = panutils.as_int(sz.value)
+        amt: Optional[PropertyEntry] = prop_stream.get_value(
+            PropIdEnum.PidTagAttachMimeTag.value)
+        if amt:
+            self.AttachMimeTag = panutils.as_str(amt.value)
 
     def __str__(self) -> str:
 
@@ -573,7 +579,7 @@ class MSMSG:
     attachments: list[Attachment]
     ptype_mapping: dict[PTypeEnum, PType]
     Subject: str
-    ClientSubmitTime: datetime
+    ClientSubmitTime: Optional[datetime]
     SentRepresentingName: str
     SenderName: str
     SenderSmtpAddress: str
@@ -605,32 +611,64 @@ class MSMSG:
 
         self.Subject = panutils.as_str(self.prop_stream.get_value(
             PropIdEnum.PidTagSubjectW.value).value)
-        self.ClientSubmitTime = panutils.as_datetime(self.prop_stream.get_value(
-            PropIdEnum.PidTagClientSubmitTime.value).value)
-        self.SentRepresentingName = panutils.as_str(self.prop_stream.get_value(
-            PropIdEnum.PidTagSentRepresentingNameW.value).value)
-        self.SenderName = panutils.as_str(self.prop_stream.get_value(
-            PropIdEnum.PidTagSenderName.value).value)
-        self.SenderSmtpAddress = panutils.as_str(self.prop_stream.get_value(
-            PropIdEnum.PidTagSenderSmtpAddress.value).value)
-        self.MessageDeliveryTime = panutils.as_datetime(self.prop_stream.get_value(
-            PropIdEnum.PidTagMessageDeliveryTime.value).value)
+
         self.MessageFlags = panutils.as_int(self.prop_stream.get_value(
             PropIdEnum.PidTagMessageFlags.value).value)
-        self.MessageStatus = panutils.as_int(self.prop_stream.get_value(
-            PropIdEnum.PidTagMessageStatus.value).value)
         # self.HasAttachments  = (self.MessageFlags & Message.mfHasAttach == Message.mfHasAttach)
-        self.MessageSize = panutils.as_int(self.prop_stream.get_value(
-            PropIdEnum.PidTagMessageSize.value).value)
+
         self.Body = panutils.as_str(self.prop_stream.get_value(
             PropIdEnum.PidTagBody.value).value)
-        # self.Read = (self.MessageFlags & Message.mfRead == Message.mfRead)
-        self.TransportMessageHeaders = panutils.as_str(self.prop_stream.get_value(
-            PropIdEnum.PidTagTransportMessageHeaders.value).value)
+
         self.DisplayTo = panutils.as_str(self.prop_stream.get_value(
             PropIdEnum.PidTagDisplayToW.value).value)
-        self.XOriginatingIP = panutils.as_str(self.prop_stream.get_value(
-            PropIdEnum.PidTagXOriginatingIp.value).value)  # x-originating-ip
+
+        # self.Read = (self.MessageFlags & Message.mfRead == Message.mfRead)
+        # If the msg file is from a draft, then
+        # values below are null
+        cst: Optional[PropertyEntry] = self.prop_stream.get_value(
+            PropIdEnum.PidTagClientSubmitTime.value)
+        if cst:
+            self.ClientSubmitTime = panutils.as_datetime(cst.value)
+
+        srt: Optional[PropertyEntry] = self.prop_stream.get_value(
+            PropIdEnum.PidTagSentRepresentingNameW.value)
+        if srt:
+            self.SentRepresentingName = panutils.as_str(srt.value)
+
+        sn: Optional[PropertyEntry] = self.prop_stream.get_value(
+            PropIdEnum.PidTagSenderName.value)
+        if sn:
+            self.SenderName = panutils.as_str(sn.value)
+
+        ssa: Optional[PropertyEntry] = self.prop_stream.get_value(
+            PropIdEnum.PidTagSenderSmtpAddress.value)
+        if ssa:
+            self.SenderSmtpAddress = panutils.as_str(ssa.value)
+
+        mdt: Optional[PropertyEntry] = self.prop_stream.get_value(
+            PropIdEnum.PidTagMessageDeliveryTime.value)
+        if mdt:
+            self.MessageDeliveryTime = panutils.as_datetime(mdt.value)
+
+        ms: Optional[PropertyEntry] = self.prop_stream.get_value(
+            PropIdEnum.PidTagMessageStatus.value)
+        if ms:
+            self.MessageStatus = panutils.as_int(ms.value)
+
+        msz: Optional[PropertyEntry] = self.prop_stream.get_value(
+            PropIdEnum.PidTagMessageSize.value)
+        if msz:
+            self.MessageSize = panutils.as_int(msz.value)
+
+        tmh: Optional[PropertyEntry] = self.prop_stream.get_value(
+            PropIdEnum.PidTagTransportMessageHeaders.value)
+        if tmh:
+            self.TransportMessageHeaders = panutils.as_str(tmh.value)
+
+        x: Optional[PropertyEntry] = self.prop_stream.get_value(
+            PropIdEnum.PidTagXOriginatingIp.value)
+        if x:
+            self.XOriginatingIP = panutils.as_str(x.value)  # x-originating-ip
 
     def set_recipients(self) -> None:
 
