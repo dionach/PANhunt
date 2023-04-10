@@ -599,6 +599,9 @@ class MSMSG:
         self.cfb = MSCFB(msg_file_path)
         self.validMSG = self.cfb.validCFB
 
+        if self.validMSG is False:
+            return
+
         self.root_dir_entry = self.cfb.directory.entries[0]
         self.prop_stream = PropertyStream(
             self, self.root_dir_entry, PropertyStream.TOPLEVEL_HEADER_SIZE)  # root
