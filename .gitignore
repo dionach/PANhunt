@@ -151,6 +151,7 @@ launch.json
 settings.py
 PANhunt.pyproj
 *.exe
+test/
 
 # Graphs
 *.svg
