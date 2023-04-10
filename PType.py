@@ -2,7 +2,7 @@ from datetime import datetime, timedelta
 from typing import Literal, Optional, Union
 
 import panutils
-from exceptions import MSGException
+from exceptions import PANHuntException
 from PTypeEnum import PTypeEnum
 
 _ValueType = Optional[Union[int, float, datetime, bool, str,
@@ -93,19 +93,21 @@ class PType:
             return None
         if self.ptype == PTypeEnum.PtypObject:
             return value_bytes
-        raise MSGException(f"Invalid PTypeEnum for value {self.ptype}")
+        raise PANHuntException(f"Invalid PTypeEnum for value {self.ptype}")
 
     def unpack_list_int(self, value_bytes: bytes, bit_size: Literal[16, 32, 64]) -> list[int]:
         format_dict: dict[int, str] = {16: 'h', 32: 'i', 64: 'q'}
-        count: int = len(value_bytes) // (bit_size // 8)
+        buffer_size = (bit_size // 8)
+        count: int = len(value_bytes) // buffer_size
         return [panutils.unpack_integer(
-            format_dict[bit_size], value_bytes[i * count:(i + 1) * count]) for i in range(count)]
+            format_dict[bit_size], value_bytes[i * buffer_size:(i + 1) * buffer_size]) for i in range(count)]
 
     def unpack_list_float(self, value_bytes: bytes, bit_size: Literal[32, 64]) -> list[float]:
         format_dict: dict[int, str] = {32: 'f', 64: 'd'}
-        count: int = len(value_bytes) // (bit_size // 8)
+        buffer_size = (bit_size // 8)
+        count: int = len(value_bytes) // buffer_size
         return [panutils.unpack_float(
-            format_dict[bit_size], value_bytes[i * count:(i + 1) * count]) for i in range(count)]
+            format_dict[bit_size], value_bytes[i * buffer_size:(i + 1) * buffer_size]) for i in range(count)]
 
     def get_floating_time(self, time_bytes: bytes) -> datetime:
 

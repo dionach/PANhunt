@@ -1,4 +1,5 @@
 import io
+import logging
 import os
 import sys
 import zipfile
@@ -8,6 +9,7 @@ from typing import Generator, Optional
 import msmsg
 import panutils
 import pst
+from exceptions import PANHuntException
 from PAN import PAN
 from patterns import CardPatternSingleton
 
@@ -21,7 +23,7 @@ class PANFile:
     root: str
     ext: str
     filetype: Optional[str]
-    errors: Optional[list[str]]
+    errors: Optional[list[str]] = None
     matches: list[PAN]
     size: int
     accessed: datetime
@@ -33,7 +35,6 @@ class PANFile:
         self.dir = file_dir
         self.path = os.path.join(self.dir, self.filename)
         self.root, self.ext = os.path.splitext(self.filename)
-        self.errors = []
         self.filetype = None
         self.matches = []
 
@@ -51,7 +52,7 @@ class PANFile:
             self.created = self.dtm_from_ts(stat.st_ctime)
         except WindowsError:
             self.size = -1
-            self.set_error(sys.exc_info()[1])
+            self.set_error(str(sys.exc_info()[1]))
 
     def dtm_from_ts(self, ts: float) -> datetime:
 
@@ -62,16 +63,17 @@ class PANFile:
                 # Mac OSX "while copying" thing
                 return datetime(1946, 2, 14, 8, 34, 56)
             else:
-                raise Exception() from ve
-
-            # self.set_error(sys.exc_info()[1])
+                # raise Exception() from ve
+                self.set_error(str(sys.exc_info()[1]))
+                return None
 
     # TODO: Use a general error logging and display mechanism
-    def set_error(self, error_msg: Optional[BaseException]) -> None:
-        pass
-        # self.errors.append(error_msg)
-        # print(colorama.Fore.RED + panutils.unicode2ascii('ERROR %s on %s' %
-        #       (error_msg, self.path)) + colorama.Fore.WHITE)
+    def set_error(self, error_msg: str) -> None:
+        if self.errors is None:
+            self.errors = [error_msg]
+        else:
+            self.errors.append(error_msg)
+        logging.error(error_msg)
 
     def check_regexs(self, excluded_pans_list: list[str], search_extensions: dict[str, list[str]]) -> list[PAN]:
         """Checks the file for matching regular expressions: if a ZIP then each file in the ZIP (recursively) or the text in a document"""
@@ -86,23 +88,21 @@ class PANFile:
                         excluded_pans_list=excluded_pans_list,
                         search_extensions=search_extensions)
                 else:
-                    self.set_error(ValueError('Invalid ZIP file'))
+                    self.set_error('Invalid ZIP file')
             except IOError:
-                self.set_error(sys.exc_info()[1])
+                self.set_error(str(sys.exc_info()[1]))
             except Exception:
-                self.set_error(sys.exc_info()[1])
+                self.set_error(str(sys.exc_info()[1]))
 
         elif self.filetype == 'TEXT':
             try:
                 with open(self.path, 'r', encoding='utf-8', errors='backslashreplace') as f:
                     file_text: str = f.read()
                     self.check_text_regexs(file_text, '', excluded_pans_list)
-            # except WindowsError:
-            #    self.set_error(sys.exc_info()[1])
             except IOError:
-                self.set_error(sys.exc_info()[1])
+                self.set_error(str(sys.exc_info()[1]))
             except Exception:
-                self.set_error(sys.exc_info()[1])
+                self.set_error(str(sys.exc_info()[1]))
 
         elif self.filetype == 'SPECIAL':
             if panutils.get_ext(self.path) == '.msg':
@@ -114,12 +114,15 @@ class PANFile:
                                               excluded_pans_list=excluded_pans_list,
                                               search_extensions=search_extensions)
                     else:
-                        self.set_error(ValueError('Invalid MSG file'))
+                        self.set_error('Invalid MSG file')
                 except IOError:
-                    self.set_error(sys.exc_info()[1])
+                    self.set_error(str(sys.exc_info()[1]))
                 except Exception:
-                    self.set_error(sys.exc_info()[1])
+                    self.set_error(str(sys.exc_info()[1]))
 
+        if len(self.matches) > 0:
+            logging.info(
+                f'Found {len(self.matches)} possible PANs in {self.path}')
         return self.matches
 
     def check_text_regexs(self, text: str, sub_path: str, excluded_pans_list: list[str]) -> None:
@@ -173,9 +176,9 @@ class PANFile:
             pst_file.close()
 
         except IOError:
-            self.set_error(sys.exc_info()[1])
-        except pst.PSTException:
-            self.set_error(sys.exc_info()[1])
+            self.set_error(str(sys.exc_info()[1]))
+        except pst.PANHuntException:
+            self.set_error(str(sys.exc_info()[1]))
 
     def check_attachment_regexs(self, attachment: pst.Attachment | msmsg.Attachment, sub_path: str, excluded_pans_list: list[str], search_extensions: dict[str, list[str]]) -> None:
         """for PST and MSG attachments, check attachment for valid extension and then regexs"""
@@ -200,7 +203,7 @@ class PANFile:
                                           search_extensions=search_extensions)
                     memory_zip.close()
                 except RuntimeError:  # RuntimeError: # e.g. zip needs password
-                    self.set_error(sys.exc_info()[1])
+                    self.set_error(str(sys.exc_info()[1]))
 
     def check_msg_regexs(self, msg: msmsg.MSMSG, sub_path: str, excluded_pans_list: list[str], search_extensions: dict[str, list[str]]) -> None:
 
@@ -234,7 +237,7 @@ class PANFile:
                                               excluded_pans_list=excluded_pans_list,
                                               search_extensions=search_extensions)
                 except RuntimeError:  # RuntimeError: # e.g. zip needs password
-                    self.set_error(sys.exc_info()[1])
+                    self.set_error(str(sys.exc_info()[1]))
             # normal doc
             elif panutils.get_ext(file_in_zip) in search_extensions['TEXT']:
                 try:
@@ -245,7 +248,7 @@ class PANFile:
                                                sub_path, panutils.decode_zip_filename(file_in_zip)),
                                            excluded_pans_list=excluded_pans_list)
                 except RuntimeError:  # RuntimeError: # e.g. zip needs password
-                    self.set_error(sys.exc_info()[1])
+                    self.set_error(str(sys.exc_info()[1]))
             else:  # SPECIAL
                 try:
                     if panutils.get_ext(file_in_zip) == '.msg':
@@ -261,4 +264,4 @@ class PANFile:
                                                   search_extensions=search_extensions)
                         memory_msg.close()
                 except RuntimeError:  # RuntimeError
-                    self.set_error(sys.exc_info()[1])
+                    self.set_error(str(sys.exc_info()[1]))

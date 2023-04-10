@@ -11,6 +11,7 @@
 import argparse
 import datetime as dt
 import itertools
+import logging
 import math
 import os
 import string
@@ -22,7 +23,7 @@ from typing import Generator, Literal, Optional, Type, Union
 
 import panutils
 from CryptMethodEnum import CryptMethodEnum
-from exceptions import PSTException
+from exceptions import PANHuntException
 from PropIdEnum import PropIdEnum
 from PTypeEnum import PTypeEnum
 
@@ -165,7 +166,7 @@ class Page:
 
         # fixed 512 bytes
         if len(value_bytes) != Page.PAGE_SIZE:
-            raise PSTException('Invalid Page size')
+            raise PANHuntException('Invalid Page size')
 
         ptype: int
         ptypeRepeat: int
@@ -188,10 +189,10 @@ class Page:
         self.dwCRC = dwCRC
 
         if self.ptype < Page.ptypeBBT or self.ptype > Page.ptypeDL:
-            raise PSTException('Invalid Page Type %s ' %
-                               hex(self.ptype))
+            raise PANHuntException('Invalid Page Type %s ' %
+                                   hex(self.ptype))
         if self.ptype != self.ptypeRepeat:
-            raise PSTException('Page Type does not match Page Type Repeat %s!=%s ' % (
+            raise PANHuntException('Page Type does not match Page Type Repeat %s!=%s ' % (
                 hex(self.ptype), hex(self.ptypeRepeat)))
 
         entry_type: Type[BBTENTRY] | Type[NBTENTRY] | Type[BTENTRY]
@@ -409,10 +410,10 @@ class Block:
         self.bid = BID(bid)
 
         if self.bid.bid != bid_check.bid:
-            raise PSTException('Block bid %s != ref bid %s' %
-                               (self.bid, bid_check))
+            raise PANHuntException('Block bid %s != ref bid %s' %
+                                   (self.bid, bid_check))
         if data_size != self.cb:
-            raise PSTException(
+            raise PANHuntException(
                 'BBT Entry data size %s != Block data size %s' % (data_size, self.cb))
 
         if not self.bid.is_internal:
@@ -444,7 +445,8 @@ class Block:
                 elif self.cLevel == 2:  # XXBLOCK
                     self.block_type = Block.btypeXXBLOCK
                 else:
-                    raise PSTException('Invalid Block Level %s' % self.cLevel)
+                    raise PANHuntException(
+                        'Invalid Block Level %s' % self.cLevel)
                 self.rgbid = []
                 for i in range(self.cEnt):
                     self.rgbid.append(
@@ -464,10 +466,11 @@ class Block:
                         self.rgentries.append(SIENTRY(
                             value_bytes[sl_si_entries_offset + i * sientry_size:sl_si_entries_offset + (i + 1) * sientry_size]))
                 else:
-                    raise PSTException('Invalid Block Level %s' % self.cLevel)
+                    raise PANHuntException(
+                        'Invalid Block Level %s' % self.cLevel)
 
             else:
-                raise PSTException('Invalid Block Type %s' % self.btype)
+                raise PANHuntException('Invalid Block Type %s' % self.btype)
 
     def __repr__(self) -> str:
 
@@ -501,7 +504,7 @@ class NBD:
         try:
             bbt_entry: BBTENTRY = self.bbt_entries[bid.bid]
         except KeyError:
-            raise PSTException('Invalid BBTEntry: %s' % bid)
+            raise PANHuntException('Invalid BBTEntry: %s' % bid)
 
         offset: int = bbt_entry.BREF.ib
         data_size: int = bbt_entry.cb
@@ -533,18 +536,18 @@ class NBD:
             for xbid in block.rgbid:
                 xblock: Block = self.fetch_block(xbid)
                 if xblock.block_type != Block.btypeData:
-                    raise PSTException(
+                    raise PANHuntException(
                         'Expecting data block, got block type %s' % xblock.block_type)
                 data_list.append(xblock.data_block)
         elif block.block_type == Block.btypeXXBLOCK:
             for xxbid in block.rgbid:
                 xxblock: Block = self.fetch_block(xxbid)
                 if xxblock.block_type != Block.btypeXBLOCK:
-                    raise PSTException(
+                    raise PANHuntException(
                         'Expecting XBLOCK, got block type %s' % xxblock.block_type)
                 data_list.extend(self.fetch_all_block_data(xxbid))
         else:
-            raise PSTException(
+            raise PANHuntException(
                 'Invalid block type (not data/XBLOCK/XXBLOCK), got %s' % block.block_type)
         return data_list
 
@@ -558,7 +561,7 @@ class NBD:
                 if isinstance(entry, SLENTRY):
                     slentry: SLENTRY = entry
                     if slentry.nid.nid in list(subnodes.keys()):
-                        raise PSTException(
+                        raise PANHuntException(
                             'Duplicate subnode %s' % slentry.nid)
                     subnodes[slentry.nid.nid] = slentry
         elif block.block_type == Block.btypeSIBLOCK:
@@ -566,7 +569,7 @@ class NBD:
                 if isinstance(entry, SIENTRY):
                     subnodes.update(self.fetch_subnodes(entry.bid))
         else:
-            raise PSTException(
+            raise PANHuntException(
                 'Invalid block type (not SLBLOCK/SIBLOCK), got %s' % block.block_type)
         return subnodes
 
@@ -579,17 +582,17 @@ class NBD:
 
             if isinstance(entry, NBTENTRY):
                 if entry.nid.nid in leaf_entries.keys():
-                    raise PSTException('Invalid Leaf Key %s' % entry)
+                    raise PANHuntException('Invalid Leaf Key %s' % entry)
                 leaf_entries[entry.nid.nid] = entry
             elif isinstance(entry, BBTENTRY):
                 if entry.BREF.bid.bid in leaf_entries.keys():
-                    raise PSTException('Invalid Leaf Key %s' % entry)
+                    raise PANHuntException('Invalid Leaf Key %s' % entry)
                 leaf_entries[entry.BREF.bid.bid] = entry
             elif isinstance(entry, BTENTRY):
                 leaf_entries.update(self.get_page_leaf_entries(
                     entry_type, entry.BREF.ib))
             else:
-                raise PSTException('Invalid Entry Type')
+                raise PANHuntException('Invalid Entry Type')
         return leaf_entries
 
 
@@ -677,7 +680,8 @@ class HN:
 
                 self.hidUserRoot = HID(hidUserRootBytes)
                 if self.bSig != 0xEC:
-                    raise PSTException('Invalid HN Signature %s' % self.bSig)
+                    raise PANHuntException(
+                        'Invalid HN Signature %s' % self.bSig)
             else:  # HNPAGEHDR or HNBITMAPHDR
                 ibHnpm = panutils.unpack_integer('H', section_bytes[:2])
             self.hnpagemaps.append(HNPAGEMAP(section_bytes[ibHnpm:]))
@@ -740,7 +744,7 @@ class BTH:
             'BBBB4s', bth_header_bytes)
         self.hidRoot: HID = HID(hidRootBytes)
         if self.bType != HN.bTypeBTH:
-            raise PSTException('Invalid BTH Type %s' % self.bType)
+            raise PANHuntException('Invalid BTH Type %s' % self.bType)
         self.bth_data_list = []
         bth_working_stack: list[BTHIntermediate] = []
         if self.hidRoot.hidIndex != 0:
@@ -827,7 +831,7 @@ class PCBTHData:
                 if hn.subnodes and self.subnode_nid.nid in list(hn.subnodes.keys()):
                     subnode_nid_bid: BID = hn.subnodes[self.subnode_nid.nid].bidData
                 else:
-                    raise PSTException(
+                    raise PANHuntException(
                         'Invalid NID subnode reference %s' % self.subnode_nid)
                 data_list: list[bytes] = hn.ltp.nbd.fetch_all_block_data(
                     subnode_nid_bid)
@@ -986,13 +990,15 @@ class PC:  # Property Context
 
         self.hn = hn
         if hn.bClientSig != HN.bTypePC:
-            raise PSTException(
+            raise PANHuntException(
                 'Invalid HN bClientSig, not bTypePC, is %s' % hn.bClientSig)
         self.bth = BTH(hn, hn.hidUserRoot)
         if self.bth.cbKey != 2:
-            raise PSTException('Invalid PC BTH key size: %s' % self.bth.cbKey)
+            raise PANHuntException(
+                'Invalid PC BTH key size: %s' % self.bth.cbKey)
         if self.bth.cbEnt != 6:
-            raise PSTException('Invalid PC BTH data size: %s' % self.bth.cbEnt)
+            raise PANHuntException(
+                'Invalid PC BTH data size: %s' % self.bth.cbEnt)
         self.properties = {}
         for bth_data in self.bth.bth_data_list:
             pc_property: PCBTHData = PCBTHData(bth_data, hn)
@@ -1075,12 +1081,12 @@ class TC:  # Table Context
 
         self.hn = hn
         if hn.bClientSig != HN.bTypeTC:
-            raise PSTException(
+            raise PANHuntException(
                 'Invalid HN bClientSig, not bTypeTC, is %s' % hn.bClientSig)
         tcinfo_bytes: bytes = hn.get_hid_data(hn.hidUserRoot)
         self.bType, self.cCols = struct.unpack('BB', tcinfo_bytes[:2])
         if self.bType != HN.bTypeTC:
-            raise PSTException(
+            raise PANHuntException(
                 'Invalid TCINFO bType, not bTypeTC, is %s' % self.bType)
         self.rgib = struct.unpack('HHHH', tcinfo_bytes[2:10])    # type: ignore
         hidRowIndexBytes, hnidRowsBytes, hidIndexBytes = struct.unpack(
@@ -1106,7 +1112,7 @@ class TC:  # Table Context
         if not (self.hnidRows.is_hid and self.hnidRows.hidIndex == 0):  # type: ignore
             row_index_bth: BTH = BTH(self.hn, self.hidRowIndex)
             if row_index_bth.cbKey != 4:
-                raise PSTException(
+                raise PANHuntException(
                     'Invalid TC RowIndex key size %s' % row_index_bth.cbKey)
             for bth_data in row_index_bth.bth_data_list:
                 tcrowid: TCROWID = TCROWID(bth_data)
@@ -1141,7 +1147,7 @@ class TC:  # Table Context
                         row_matrix_data = self.hn.ltp.nbd.fetch_all_block_data(
                             subnode_nid_bid)
                     else:
-                        raise PSTException(
+                        raise PANHuntException(
                             'Row Matrix HNID not in Subnodes: %s' % self.hnidRows.nid)
                 else:
                     raise TypeError()
@@ -1165,7 +1171,7 @@ class TC:  # Table Context
                         data_bytes = None
 
                     if tcoldesc.wPropId in rowvals:
-                        raise PSTException(
+                        raise PANHuntException(
                             'Property ID %s already in row data' % hex(tcoldesc.wPropId))
                     rowvals[tcoldesc.wPropId] = self.get_row_cell_value(
                         data_bytes, tcoldesc)
@@ -1194,7 +1200,7 @@ class TC:  # Table Context
         if self.hn.subnodes and subnode_nid.nid in list(self.hn.subnodes.keys()):
             subnode_nid_bid: BID = self.hn.subnodes[subnode_nid.nid].bidData
         else:
-            raise PSTException(
+            raise PANHuntException(
                 'Row Matrix Value HNID Subnode invalid: %s' % subnode_nid)
 
         data_sectors: list[bytes] = self.hn.ltp.nbd.fetch_all_block_data(
@@ -1393,59 +1399,54 @@ class Folder:
 
     def __init__(self, nid: NID, ltp: LTP, parent_path='', messaging: Optional['Messaging'] = None) -> None:
 
-        if nid.nidType != NID.NID_TYPE_NORMAL_FOLDER:
-            raise PSTException('Invalid Folder NID Type: %s' % nid.nidType)
-        self.pc = ltp.get_pc_by_nid(nid)
-        self.DisplayName = panutils.as_str(self.pc.getval(
-            PropIdEnum.PidTagDisplayName.value).value)
-        self.path = parent_path + '\\' + self.DisplayName
-
-        # print('FOLDER DEBUG', self.DisplayName, self.pc)
-
-        # entryids in PST are stored as nids
-        if messaging:
-            self.EntryId = 4 * b'\x00' + \
-                messaging.store_record_key + struct.pack('I', nid.nid)
-
-        self.ContentCount = panutils.as_int(self.pc.getval(
-            PropIdEnum.PidTagContentCount.value).value)
-
-        cc = self.pc.getval(
-            PropIdEnum.PidTagContainerClass.value)
-        if cc:
-            ccv = cc.value
-            self.ContainerClass = panutils.as_str(ccv)
-
-        self.HasSubfolders = panutils.as_int(self.pc.getval(
-            PropIdEnum.PidTagSubfolders.value).value) == 1
-
-        nid_hierarchy: NID = NID(nid.nidIndex | NID.NID_TYPE_HIERARCHY_TABLE)
-        nid_contents: NID = NID(nid.nidIndex | NID.NID_TYPE_CONTENTS_TABLE)
-        # FAI = Folder Associated Information
-        nid_fai: NID = NID(nid.nidIndex | NID.NID_TYPE_ASSOC_CONTENTS_TABLE)
-
         try:
+            if nid.nidType != NID.NID_TYPE_NORMAL_FOLDER:
+                raise PANHuntException(
+                    'Invalid Folder NID Type: %s' % nid.nidType)
+            self.pc = ltp.get_pc_by_nid(nid)
+            self.DisplayName = panutils.as_str(self.pc.getval(
+                PropIdEnum.PidTagDisplayName.value).value)
+            self.path = parent_path + '\\' + self.DisplayName
+
+            # print('FOLDER DEBUG', self.DisplayName, self.pc)
+
+            # entryids in PST are stored as nids
+            if messaging:
+                self.EntryId = 4 * b'\x00' + \
+                    messaging.store_record_key + struct.pack('I', nid.nid)
+
+            self.ContentCount = panutils.as_int(self.pc.getval(
+                PropIdEnum.PidTagContentCount.value).value)
+
+            cc = self.pc.getval(
+                PropIdEnum.PidTagContainerClass.value)
+            if cc:
+                ccv = cc.value
+                self.ContainerClass = panutils.as_str(ccv)
+
+            self.HasSubfolders = panutils.as_int(self.pc.getval(
+                PropIdEnum.PidTagSubfolders.value).value) == 1
+
+            nid_hierarchy: NID = NID(
+                nid.nidIndex | NID.NID_TYPE_HIERARCHY_TABLE)
+            nid_contents: NID = NID(nid.nidIndex | NID.NID_TYPE_CONTENTS_TABLE)
+            # FAI = Folder Associated Information
+            nid_fai: NID = NID(
+                nid.nidIndex | NID.NID_TYPE_ASSOC_CONTENTS_TABLE)
+
             self.tc_hierarchy = None
             self.subfolders = []
             self.tc_hierarchy = ltp.get_tc_by_nid(nid_hierarchy)
             self.subfolders = [SubFolder(self.tc_hierarchy.RowIndex[RowIndex].nid, panutils.as_str(self.tc_hierarchy.getval(
                 RowIndex, PropIdEnum.PidTagDisplayName)), self.path) for RowIndex in range(len(self.tc_hierarchy.RowIndex))]
-        except PSTException as e:
-            log_error(e)
-
-        try:
             self.tc_contents = None
             self.submessages = []
             self.tc_contents = ltp.get_tc_by_nid(nid_contents)
             self.submessages = self.__get_submessages(ltp)
-        except PSTException as e:
-            log_error(e)
-
-        try:
             self.tc_fai = None
             self.tc_fai = ltp.get_tc_by_nid(nid_fai)
-        except PSTException as e:
-            log_error(e)
+        except PANHuntException as e:
+            logging.error(e)
 
     def __get_submessages(self, ltp) -> list[SubMessage]:
         submessages: list[SubMessage] = []
@@ -1468,14 +1469,6 @@ class Folder:
                                     Subject=subject, ClientSubmitTime=cst)
                     submessages.append(sm)
         return submessages
-
-        # self.submessages = [SubMessage(self.tc_contents.RowIndex[RowIndex].nid,
-        #                                    panutils.as_str(self.tc_contents.getval(
-        #                                        RowIndex, PropIdEnum.PidTagSentRepresentingNameW) or "default"),
-        #                                    ltp.strip_SubjectPrefix(
-        #                                        panutils.as_str(self.tc_contents.getval(RowIndex, PropIdEnum.PidTagSubjectW) or "default")),
-        #                                    panutils.as_datetime(self.tc_contents.getval(RowIndex, PropIdEnum.PidTagClientSubmitTime)))
-        #                         for RowIndex in range(len(self.tc_contents.RowIndex)) if RowIndex in list(self.tc_contents.RowIndex.keys())]
 
     def __repr__(self) -> str:
 
@@ -1573,7 +1566,7 @@ class Message:
             self.pc = PC(hn)
         else:
             if nid.nidType != NID.NID_TYPE_NORMAL_MESSAGE:
-                raise PSTException(
+                raise PANHuntException(
                     'Invalid Message NID Type: %s' % nid.nidType)
             self.pc = ltp.get_pc_by_nid(nid)
 
@@ -1854,11 +1847,12 @@ class Messaging:
     def __init__(self, ltp: LTP) -> None:
 
         self.ltp = ltp
-        self.set_message_store()
+
         try:
+            self.set_message_store()
             self.set_name_to_id_map()
-        except PSTException as e:
-            log_error(e)
+        except PANHuntException as e:
+            logging.error(e)
 
     def set_message_store(self) -> None:
 
@@ -2378,16 +2372,16 @@ class PST:
             self.fd.readline()
         except PermissionError:
             self.fd.close()
-            raise PSTException(
+            raise PANHuntException(
                 f'The PST file is in use (probably by Outlook application).')
 
         self.header = Header(self.fd)
         if not self.header.validPST:
-            raise PSTException('PST file is not a valid PST')
+            raise PANHuntException('PST file is not a valid PST')
 
         # unencoded or NDB_CRYPT_PERMUTE
         if self.header.bCryptMethod == CryptMethodEnum.Unsupported:
-            raise PSTException(
+            raise PANHuntException(
                 'Unsupported encoding/crypt method %s' % self.header.bCryptMethod)
 
         self.nbd = NBD(self.fd, self.header)
@@ -2412,24 +2406,19 @@ class PST:
 
         while subfolder_stack:
             subfolder: SubFolder = subfolder_stack.pop()
-            try:
-                folder: Folder = Folder(subfolder.nid, self.ltp,
-                                        subfolder.parent_path, self.messaging)
-                subfolder_stack.extend(folder.subfolders)
-                yield folder
-            except PSTException as e:
-                log_error(e)
+            folder: Folder = Folder(subfolder.nid, self.ltp,
+                                    subfolder.parent_path, self.messaging)
+            subfolder_stack.extend(folder.subfolders)
+            yield folder
 
     def message_generator(self, folder: Folder) -> Generator[Message, None, None]:
 
         try:
             for submessage in folder.submessages:
-                try:
-                    message: Message = Message(submessage.nid, self.ltp,
-                                               messaging=self.messaging)
-                    yield message
-                except PSTException as e:
-                    log_error(e)
+                message: Message = Message(submessage.nid, self.ltp,
+                                           messaging=self.messaging)
+                yield message
+
         except GeneratorExit:
             pass
         finally:
@@ -2554,15 +2543,6 @@ def get_unused_filename(filepath: str) -> str:
         return '%s-%s%s' % (os.path.splitext(filepath)
                             [0], suffix, os.path.splitext(filepath)[1])
     return filepath
-
-
-def log_error(e: BaseException) -> None:
-    # TODO: Use a general error logging and display mechanism
-    # global error_log_list
-    # error_log_list.append(e.message)
-    # Implement a logging solution
-    sys.stderr.write(str(e) + '\n')
-
 
 ###############################################################################################################################
 #

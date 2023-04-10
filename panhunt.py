@@ -11,6 +11,9 @@
 
 import argparse
 import hashlib
+import locale
+import logging
+from math import log
 import os
 import platform
 import sys
@@ -21,6 +24,7 @@ import colorama
 
 import panutils
 from config import PANHuntConfigSingleton
+from exceptions import PANHuntException
 from PAN import PAN
 from PANFile import PANFile
 from pbar import FileProgressbar, MainProgressbar
@@ -126,7 +130,7 @@ class Hunter:
                 extension_types[ext] = ext_type
 
         self.pbar = MainProgressbar()
-        # TODO: move progressbarr update methods here
+        # TODO: move progressbar update methods here
         self.pbar.create('Doc')
 
         doc_files: list[PANFile] = []
@@ -160,8 +164,8 @@ class Hunter:
                     pan_file.filetype = extension_types[pan_file.ext.lower()]
                     if pan_file.filetype in ('TEXT', 'SPECIAL') and pan_file.size > TEXT_FILE_SIZE_LIMIT:
                         pan_file.filetype = 'OTHER'
-                        pan_file.set_error(ValueError(
-                            f'File size {panutils.size_friendly(pan_file.size)} over limit of {panutils.size_friendly(TEXT_FILE_SIZE_LIMIT)} for checking'))
+                        pan_file.set_error(
+                            f'File size {panutils.size_friendly(pan_file.size)} over limit of {panutils.size_friendly(TEXT_FILE_SIZE_LIMIT)} for checking')
                     doc_files.append(pan_file)
                     if not pan_file.errors:
                         docs_found += 1
@@ -249,7 +253,20 @@ class Hunter:
 #
 ###################################################################################################################################
 
+
 def main() -> None:
+    application_path: str = '.'
+    if getattr(sys, 'frozen', False):
+        application_path = os.path.dirname(sys.executable)
+    elif __file__:
+        application_path = os.path.dirname(__file__)
+    logging.basicConfig(filename=os.path.join(application_path, 'PANhunt.log'),
+                        encoding='utf-8',
+                        format='%(asctime)s %(message)s',
+                        level=logging.DEBUG)
+
+    excepthook = logging.error
+    logging.info('Starting')
 
     colorama.init()
 
@@ -328,6 +345,7 @@ def main() -> None:
 if __name__ == "__main__":
     try:
         main()
+        logging.info('Exiting')
     except KeyboardInterrupt:
         print('Cancelled by user.')
         try:
@@ -336,6 +354,7 @@ if __name__ == "__main__":
             os._exit(0)
     except Exception as ex:
         print('ERROR: ' + str(ex))
+        logging.info('Exiting')
         try:
             sys.exit(1)
         except SystemExit:
