@@ -624,11 +624,12 @@ class HID:
 class HNPAGEMAP:
     cAlloc: int
     cFree: int
+    rgibAlloc: list[int]
 
     def __init__(self, value_bytes: bytes) -> None:
 
         self.cAlloc, self.cFree = struct.unpack('HH', value_bytes[:4])
-        self.rgibAlloc: list[int] = []
+        self.rgibAlloc = []
         for i in range(self.cAlloc + 1):  # cAlloc+1 is next free
             self.rgibAlloc.append(struct.unpack(
                 'H', value_bytes[4 + i * 2:4 + (i + 1) * 2])[0])
@@ -908,7 +909,8 @@ class PType:
                 value_bytes)
             s: list[str] = []
             for i in range(ulCount):
-                s.append(value_bytes[rgulDataOffsets[i]:rgulDataOffsets[i + 1]].decode('utf-16-le'))
+                s.append(value_bytes[rgulDataOffsets[i]
+                         :rgulDataOffsets[i + 1]].decode('utf-16-le'))
             return s
         if self.ptype == PTypeEnum.PtypMultipleString8:
             ulCount, rgulDataOffsets = self.get_multi_value_offsets(
@@ -1362,30 +1364,33 @@ class LTP:
     def get_pc_by_nid(self, nid: NID) -> PC:
 
         nbt_entry: NBTENTRY = self.nbd.nbt_entries[nid.nid]
-        datas: list[bytes] = self.nbd.fetch_all_block_data(nbt_entry.bidData)
-        hn: HN = HN(nbt_entry, self, datas)
+        block_data_list: list[bytes] = self.nbd.fetch_all_block_data(
+            nbt_entry.bidData)
+        hn: HN = HN(nbt_entry, self, block_data_list)
         return PC(hn)
 
     def get_pc_by_slentry(self, slentry: SLENTRY) -> PC:
 
-        datas: list[bytes] = self.nbd.fetch_all_block_data(slentry.bidData)
+        block_data_list: list[bytes] = self.nbd.fetch_all_block_data(
+            slentry.bidData)
         # TODO: Solve HN with SLENTRY parameter
-        hn: HN = HN(slentry, self, datas)
+        hn: HN = HN(slentry, self, block_data_list)
 
         return PC(hn)
 
     def get_tc_by_nid(self, nid: NID) -> TC:
 
         nbt_entry: NBTENTRY = self.nbd.nbt_entries[nid.nid]
-        datas: list[bytes] = self.nbd.fetch_all_block_data(nbt_entry.bidData)
-        hn: HN = HN(nbt_entry, self, datas)
+        block_data_list: list[bytes] = self.nbd.fetch_all_block_data(
+            nbt_entry.bidData)
+        hn: HN = HN(nbt_entry, self, block_data_list)
         return TC(hn)
 
     def get_tc_by_slentry(self, slentry: SLENTRY) -> TC:
 
-        datas: list[bytes] = self.nbd.fetch_all_block_data(slentry.bidData)
+        block_data_list: list[bytes] = self.nbd.fetch_all_block_data(slentry.bidData)
         # TODO: Solve HN with SLENTRY parameter
-        hn: HN = HN(slentry, self, datas)
+        hn: HN = HN(slentry, self, block_data_list)
 
         return TC(hn)
 
