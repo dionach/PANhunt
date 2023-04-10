@@ -1568,12 +1568,12 @@ class SubRecipient:
     RecipientType: int
     DisplayName: str
     ObjectType: int
-    AddressType: int
+    AddressType: str
     EmailAddress: str
     DisplayType: int
     EntryId: 'EntryID'
 
-    def __init__(self, RecipientType: int, DisplayName: str, ObjectType: int, AddressType: int, EmailAddress: str, DisplayType: int, EntryId: 'EntryID') -> None:
+    def __init__(self, RecipientType: int, DisplayName: str, ObjectType: int, AddressType: str, EmailAddress: str, DisplayType: int, EntryId: 'EntryID') -> None:
 
         self.RecipientType, self.DisplayName, self.ObjectType, self.AddressType, self.EmailAddress, self.DisplayType, self.EntryId = RecipientType, DisplayName, ObjectType, AddressType, EmailAddress, DisplayType, EntryId
 
@@ -1691,29 +1691,56 @@ class Message:
                 elif subnode.nid.nidType == NID.NID_TYPE_RECIPIENT_TABLE:
                     self.tc_recipients = ltp.get_tc_by_slentry(subnode)
 
-        self.subattachments = []
-        if self.tc_attachments:
-            self.subattachments = [SubAttachment(self.tc_attachments.RowIndex[RowIndex].nid, panutils.as_int(self.tc_attachments.getval(RowIndex, PropIdEnum.PidTagAttachmentSize)),
-                                                 panutils.as_str(self.tc_attachments.getval(RowIndex, PropIdEnum.PidTagAttachFilename)), panutils.as_str(self.tc_attachments.getval(RowIndex, PropIdEnum.PidTagAttachLongFilename))) for RowIndex in range(len(self.tc_attachments.RowIndex))]
+        self.subattachments = self.__read_attachments()
 
-        self.subrecipients = []
+        self.subrecipients = self.__read_subrecipients()
+
+    def __read_subrecipients(self) -> list[SubRecipient]:
+        subrecipients: list[SubRecipient] = []
         if self.tc_recipients:
-            self.subrecipients = [SubRecipient(
-                panutils.as_int(self.tc_recipients.getval(
-                    RowIndex, PropIdEnum.PidTagRecipientType)),
-                panutils.as_str(self.tc_recipients.getval(
-                    RowIndex, PropIdEnum.PidTagDisplayName)),
-                panutils.as_int(self.tc_recipients.getval(
-                    RowIndex, PropIdEnum.PidTagObjectType)),
-                panutils.as_int(self.tc_recipients.getval(
-                    RowIndex, PropIdEnum.PidTagAddressType)),
-                panutils.as_str(self.tc_recipients.getval(
-                    RowIndex, PropIdEnum.PidTagEmailAddress)),
-                panutils.as_int(self.tc_recipients.getval(
-                    RowIndex, PropIdEnum.PidTagDisplayType)),
-                EntryID(panutils.as_binary(self.tc_recipients.getval(
-                    RowIndex, PropIdEnum.PidTagEntryID)))
-            ) for RowIndex in range(len(self.tc_recipients.RowIndex))]
+            for i in range(len(self.tc_recipients.RowIndex)):
+
+                r_type: int = panutils.as_int(self.tc_recipients.getval(
+                    i, PropIdEnum.PidTagRecipientType))
+                display_name: str = panutils.as_str(self.tc_recipients.getval(
+                    i, PropIdEnum.PidTagDisplayName))
+
+                obj_type: int = panutils.as_int(self.tc_recipients.getval(
+                    i, PropIdEnum.PidTagObjectType))
+                add_type: str = panutils.as_str(self.tc_recipients.getval(
+                    i, PropIdEnum.PidTagAddressType))
+                email_address: str = panutils.as_str(self.tc_recipients.getval(
+                    i, PropIdEnum.PidTagEmailAddress))
+                display_type: int = panutils.as_int(self.tc_recipients.getval(
+                    i, PropIdEnum.PidTagDisplayType))
+                value_bytes: bytes = panutils.as_binary(self.tc_recipients.getval(
+                    i, PropIdEnum.PidTagEntryID))
+                entryId: EntryID = EntryID(value_bytes)
+                subrecipients.append(SubRecipient(
+                    r_type, display_name, obj_type, add_type, email_address, display_type, entryId))
+
+        return subrecipients
+
+    def __read_attachments(self) -> list[SubAttachment]:
+        subattachments: list[SubAttachment] = []
+        if self.tc_attachments:
+            for i in range(len(self.tc_attachments.RowIndex)):
+                nid: NID = self.tc_attachments.RowIndex[i].nid
+                size: int = panutils.as_int(self.tc_attachments.getval(
+                    i, PropIdEnum.PidTagAttachmentSize))
+                filename: str = panutils.as_str(self.tc_attachments.getval(
+                    i, PropIdEnum.PidTagAttachFilename))
+                long_filename: Optional[str] = None
+                fn: _ValueType = self.tc_attachments.getval(
+                    i, PropIdEnum.PidTagAttachLongFilename)
+
+                if fn:
+                    long_filename = panutils.as_str(fn)
+
+                subattachments.append(SubAttachment(
+                    nid, size, filename, long_filename))
+
+        return subattachments
 
     def get_attachment(self, subattachment: SubAttachment) -> Optional['Attachment']:
         """ fetch attachment on demand, not when Message instanced"""
