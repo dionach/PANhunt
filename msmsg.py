@@ -15,7 +15,7 @@ from io import BufferedReader
 from typing import Optional, TypeAlias, Union
 
 import panutils
-from exceptions import MSGException
+from exceptions import PANHuntException
 from PropIdEnum import PropIdEnum
 from PType import PType
 from PTypeEnum import PTypeEnum
@@ -71,7 +71,7 @@ class FAT:
             sector = self.entries[sector]
         # if size != 0:
         if size > len(stream_bytes) or size < len(stream_bytes) - self.mscfb.SectorSize:
-            raise MSGException(
+            raise PANHuntException(
                 'FAT stream size does not match number of sectors')
         return stream_bytes[:size]
         # else:
@@ -117,7 +117,7 @@ class MiniFAT:
                                                    MiniFAT.SECTORSIZE: sector * MiniFAT.SECTORSIZE + MiniFAT.SECTORSIZE]
             sector = self.entries[sector]
         if size > len(stream_bytes) or size < len(stream_bytes) - MiniFAT.SECTORSIZE:
-            raise MSGException(
+            raise PANHuntException(
                 'Mini FAT mini stream size does not match number of mini sectors')
         return stream_bytes[:size]
 
@@ -157,7 +157,7 @@ class Directory:
                 child_entry: DirectoryEntry = self.entries[child_ids_queue.pop(
                 )]
                 if child_entry.Name in list(dir_entry.children.keys()):
-                    raise MSGException(
+                    raise PANHuntException(
                         'Directory Entry Name already in children dictionary')
                 dir_entry.children[child_entry.Name] = child_entry
                 if child_entry.SiblingID != DirectoryEntry.NOSTREAM:
@@ -252,7 +252,7 @@ class DirectoryEntry:
     def get_data(self) -> bytes:
 
         if self.ObjectType != DirectoryEntry.OBJECT_STREAM:
-            raise MSGException('Directory Entry is not a stream object')
+            raise PANHuntException('Directory Entry is not a stream object')
         if self.StreamSize < self.mscfb.MiniStreamCutoffSize:  # Mini FAT stream
             self.stream_data = self.mscfb.minifat.get_stream(
                 self.StartingSectorLocation, self.StreamSize)
@@ -357,7 +357,7 @@ class MSCFB:
         self.validCFB = True
 
         if self.FirstDIFATSectorLocation != FAT.ENDOFCHAIN:
-            raise MSGException('More than 109 DIFAT entries not supported')
+            raise PANHuntException('More than 109 DIFAT entries not supported')
 
     def get_sector_offset(self, sector: int) -> int:
 
@@ -409,7 +409,7 @@ class PropertyStream:
                 _, self.NextRecipientID, self.NextAttachmentID, self.RecipientCount, self.AttachmentCount = struct.unpack(
                     '8sIIII', property_bytes[:24])
             if (len(property_bytes) - header_size) % 16 != 0:
-                raise MSGException(
+                raise PANHuntException(
                     'Property Stream size less header is not exactly divisible by 16')
             property_entries_count: int = int(
                 (len(property_bytes) - header_size) / 16)
@@ -417,7 +417,7 @@ class PropertyStream:
                 prop_entry: PropertyEntry = PropertyEntry(
                     self.msmsg, parent_dir_entry, property_bytes[header_size + i * 16: header_size + i * 16 + 16])
                 if prop_entry in self.properties.values():
-                    raise MSGException(
+                    raise PANHuntException(
                         'PropertyID already in properties dictionary')
                 self.properties[prop_entry.PropertyID] = prop_entry
 
@@ -463,7 +463,7 @@ class PropertyEntry:
 
             if len(property_bytes) != self.size:
                 if (ptype.ptype == PTypeEnum.PtypString and len(property_bytes) + 2 != self.size) or (ptype.ptype == PTypeEnum.PtypString8 and len(property_bytes) + 1 != self.size):
-                    raise MSGException(
+                    raise PANHuntException(
                         'Property Entry size and byte length mismatch')
 
             if ptype.is_multi and ptype.is_variable:
@@ -479,7 +479,7 @@ class PropertyEntry:
 
                 property_byte_list: list[bytes] = []
                 for i in range(len(value_lengths)):
-                    index_stream_name: str = f"{stream_name}-{i}"
+                    index_stream_name: str = f"{stream_name}-{panutils.to_zeropaddedhex(i, 8)}"
                     property_byte_list.append(
                         parent_dir_entry.children[index_stream_name].get_data())
 

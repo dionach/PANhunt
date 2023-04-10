@@ -11,6 +11,7 @@
 
 import argparse
 import hashlib
+import locale
 import os
 import platform
 import sys
@@ -21,6 +22,7 @@ import colorama
 
 import panutils
 from config import PANHuntConfigSingleton
+from exceptions import PANHuntException
 from PAN import PAN
 from PANFile import PANFile
 from pbar import FileProgressbar, MainProgressbar
@@ -160,8 +162,8 @@ class Hunter:
                     pan_file.filetype = extension_types[pan_file.ext.lower()]
                     if pan_file.filetype in ('TEXT', 'SPECIAL') and pan_file.size > TEXT_FILE_SIZE_LIMIT:
                         pan_file.filetype = 'OTHER'
-                        pan_file.set_error(ValueError(
-                            f'File size {panutils.size_friendly(pan_file.size)} over limit of {panutils.size_friendly(TEXT_FILE_SIZE_LIMIT)} for checking'))
+                        pan_file.set_error(
+                            f'File size {panutils.size_friendly(pan_file.size)} over limit of {panutils.size_friendly(TEXT_FILE_SIZE_LIMIT)} for checking')
                     doc_files.append(pan_file)
                     if not pan_file.errors:
                         docs_found += 1
@@ -328,6 +330,9 @@ def main() -> None:
 if __name__ == "__main__":
     try:
         main()
+    except PANHuntException as ph:
+        print(colorama.Fore.RED +
+              panutils.unicode_to_ascii(f'ERROR: {str(ph)}') + colorama.Fore.WHITE)
     except KeyboardInterrupt:
         print('Cancelled by user.')
         try:
