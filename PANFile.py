@@ -21,7 +21,7 @@ class PANFile:
     root: str
     ext: str
     filetype: Optional[str]
-    errors: Optional[list]
+    errors: Optional[list[str]]
     matches: list[PAN]
     size: int
     accessed: datetime
@@ -67,7 +67,7 @@ class PANFile:
             # self.set_error(sys.exc_info()[1])
 
     # TODO: Use a general error logging and display mechanism
-    def set_error(self, error_msg) -> None:
+    def set_error(self, error_msg: Optional[BaseException]) -> None:
         pass
         # self.errors.append(error_msg)
         # print(colorama.Fore.RED + panutils.unicode2ascii('ERROR %s on %s' %
@@ -86,7 +86,7 @@ class PANFile:
                         excluded_pans_list=excluded_pans_list,
                         search_extensions=search_extensions)
                 else:
-                    self.set_error('Invalid ZIP file')
+                    self.set_error(ValueError('Invalid ZIP file'))
             except IOError:
                 self.set_error(sys.exc_info()[1])
             except Exception:
@@ -114,7 +114,7 @@ class PANFile:
                                               excluded_pans_list=excluded_pans_list,
                                               search_extensions=search_extensions)
                     else:
-                        self.set_error('Invalid MSG file')
+                        self.set_error(ValueError('Invalid MSG file'))
                 except IOError:
                     self.set_error(sys.exc_info()[1])
                 except Exception:
@@ -135,8 +135,6 @@ class PANFile:
 
     def check_pst_regexs(self, excluded_pans_list: list[str], search_extensions: dict[str, list[str]]) -> Generator[tuple[int, int], None, None]:
         """ Searches a pst file for regular expressions in messages and attachments using regular expressions"""
-        # TODO: Move UI related code to main method of panhunt.py
-
         try:
             pst_file = pst.PST(self.path)
             if pst_file.header.validPST:
@@ -159,7 +157,7 @@ class PANFile:
                                 message.Body, message_path, excluded_pans_list)
                         if message.HasAttachments:
                             for subattachment in message.subattachments:
-                                if panutils.get_ext(subattachment.Filename) in search_extensions['TEXT'] + search_extensions['ZIP']:
+                                if subattachment.Filename and panutils.get_ext(subattachment.Filename) in search_extensions['TEXT'] + search_extensions['ZIP']:
                                     attachment: pst.Attachment = message.get_attachment(
                                         subattachment)  # type: ignore
                                     # We already checked there is an attachment, this is to suppress type checkers
@@ -185,8 +183,7 @@ class PANFile:
         attachment_ext: str = panutils.get_ext(attachment.Filename)
         if attachment_ext in search_extensions['TEXT']:
             if attachment.BinaryData:
-                # TODO: Check if utf-8 is okay or we need ascii
-                self.check_text_regexs(text=attachment.BinaryData.decode('utf-8'),
+                self.check_text_regexs(text=attachment.BinaryData.decode('utf-8', errors='backslashreplace'),
                                        sub_path=os.path.join(
                                            sub_path, attachment.Filename),
                                        excluded_pans_list=excluded_pans_list)

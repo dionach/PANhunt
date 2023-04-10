@@ -3,7 +3,7 @@ import re
 
 class CardPatternSingleton:
 
-    pattern: dict[str, re.Pattern]
+    pattern: dict[str, re.Pattern[str]]
 
     def __init__(self) -> None:
         self.pattern = {'Mastercard': re.compile(r'(?:\D|^)(5[1-5][0-9]{2}(?:\ |\-|)[0-9]{4}(?:\ |\-|)[0-9]{4}(?:\ |\-|)[0-9]{4})(?:\D|$)'),
@@ -17,4 +17,4 @@ class CardPatternSingleton:
         return cls.instance
 
     def brands(self):
-        return self.pattern.items()
+        return list(self.pattern.items())

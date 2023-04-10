@@ -1,10 +1,13 @@
-#! /usr/bin/env python
+#! /usr/bin/env python3
 # -*- coding: UTF-8 -*-
 #
 # Copyright (c) 2014, Dionach Ltd. All rights reserved. See LICENSE file.
 #
 # PANhunt: search directories and sub directories for documents with PANs
 # By BB
+#
+# Contributors: Zafer Balkan, 2023
+
 
 import argparse
 import hashlib
@@ -12,16 +15,17 @@ import os
 import platform
 import sys
 import time
-from typing import Optional
+from typing import Final, Optional
 
 import colorama
 
 import panutils
 from config import PANHuntConfigSingleton
+from PAN import PAN
 from PANFile import PANFile
 from pbar import FileProgressbar, MainProgressbar
 
-TEXT_FILE_SIZE_LIMIT: int = 1073741824  # 1Gb
+TEXT_FILE_SIZE_LIMIT: Final[int] = 1073741824  # 1Gb
 
 app_version = '1.3'
 
@@ -40,8 +44,6 @@ class Hunter:
     pbar: MainProgressbar
 
     def hunt_pans(self) -> tuple[int, int, list[PANFile]]:
-
-        # global search_dir, excluded_directories, search_extensions
 
         # find all files to check
         all_files: list[PANFile] = self.__find_all_files_in_search_directory()
@@ -158,8 +160,8 @@ class Hunter:
                     pan_file.filetype = extension_types[pan_file.ext.lower()]
                     if pan_file.filetype in ('TEXT', 'SPECIAL') and pan_file.size > TEXT_FILE_SIZE_LIMIT:
                         pan_file.filetype = 'OTHER'
-                        pan_file.set_error(
-                            f'File size {panutils.size_friendly(pan_file.size)} over limit of {panutils.size_friendly(TEXT_FILE_SIZE_LIMIT)} for checking')
+                        pan_file.set_error(ValueError(
+                            f'File size {panutils.size_friendly(pan_file.size)} over limit of {panutils.size_friendly(TEXT_FILE_SIZE_LIMIT)} for checking'))
                     doc_files.append(pan_file)
                     if not pan_file.errors:
                         docs_found += 1
@@ -184,8 +186,8 @@ class Hunter:
         matches_found = 0
 
         for pan_file in text_or_zip_files:
-            matches: list = pan_file.check_regexs(excluded_pans_list=PANHuntConfigSingleton.instance().excluded_pans,
-                                                  search_extensions=PANHuntConfigSingleton.instance().search_extensions)
+            matches: list[PAN] = pan_file.check_regexs(excluded_pans_list=PANHuntConfigSingleton.instance().excluded_pans,
+                                                       search_extensions=PANHuntConfigSingleton.instance().search_extensions)
             matches_found += len(matches)
             files_completed += 1
             self.pbar.update(

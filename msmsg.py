@@ -1,10 +1,12 @@
-#! /usr/bin/env python
+#! /usr/bin/env python3
+# -*- coding: UTF-8 -*-
 #
 # Copyright (c) 2014, Dionach Ltd. All rights reserved. See LICENSE file.
 #
+# PANhunt: search directories and sub directories for documents with PANs
 # By BB
-# based on MS-OXMSG and MS-CFB Microsoft specification for MSG file format [MS-OXMSG].pdf v20140130
 #
+# Contributors: Zafer Balkan, 2023
 
 import os
 import struct
@@ -54,7 +56,7 @@ class FAT:
         difat_index: int = 0
         self.entries = []
         while mscfb.DIFAT[difat_index] != FAT.FREESECT:
-            sector = mscfb.DIFAT[difat_index]
+            sector: int = mscfb.DIFAT[difat_index]
             sector_bytes: bytes = mscfb.get_sector_bytes(sector)
             format: str = 'I' * (mscfb.SectorSize // 4)
             sector_fat_entries = struct.unpack(format, sector_bytes)
@@ -303,6 +305,8 @@ class MSCFB:
     FirstDIFATSectorLocation: int
     DIFATSectors: int
     DIFAT: list[int]
+    signature: bytes
+    CLSID: bytes
 
     def __init__(self, cfb_file: _FilePathOrFileObject) -> None:
         """cfb_file is unicode or string filename or a file object"""
@@ -336,10 +340,10 @@ class MSCFB:
 
         self.validCFB = False
         fd.seek(0)
-        self.signature: bytes = fd.read(8)
+        self.signature = fd.read(8)
         if self.signature != b'\xD0\xCF\x11\xE0\xA1\xB1\x1A\xE1':
             return
-        self.CLSID: bytes = fd.read(16)
+        self.CLSID = fd.read(16)
         self.MinorVersion, self.MajorVersion, self.ByteOrder, self.SectorShift, self.MiniSectorShift = struct.unpack(
             'HHHHH', fd.read(10))
         if self.MajorVersion not in (3, 4):
@@ -526,7 +530,7 @@ class Attachment:
     AttachFilename: str
     AttachLongFilename: str
     Filename: str
-    BinaryData: bytes
+    BinaryData: Optional[bytes] = None
     AttachMimeTag: str
     AttachExtension: str
 
