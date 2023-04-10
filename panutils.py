@@ -58,15 +58,6 @@ def size_friendly(size: int) -> str:
         return f"{(size / (1024 * 1024))}MB"
     return f"{(size / (1024 * 1024 * 1024))}GB"
 
-
-def filetime_to_datetime(timestamp: int) -> dt.datetime:
-    # timestamp: a 64-bit integer representing the number of 100-nanosecond intervals since January 1, 1601
-    return dt.datetime(1601, 1, 1, tzinfo=dt.timezone.utc) + dt.timedelta(microseconds=timestamp // 10)
-
-
-def filetime_bytes_to_datetime(timestamp: bytes) -> dt.datetime:
-    return filetime_to_datetime(int.from_bytes(timestamp, 'little'))
-
 # TODO: Write a typed wrapper for struct.unpack with ENUM for format: https://docs.python.org/3/library/struct.html#format-characters
 
 
