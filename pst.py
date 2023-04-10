@@ -124,7 +124,7 @@ class BREF:
     bid: BID
     ib: int
 
-    def __init__(self, value_bytes) -> None:
+    def __init__(self, value_bytes: bytes) -> None:
         bid: bytes
         ib: int
         if len(value_bytes) == 8:  # ansi
@@ -158,6 +158,7 @@ class Page:
     cEntMax: int
     cbEnt: int
     cLevel: int
+    rgEntries: list
 
     def __init__(self, value_bytes: bytes, is_ansi: bool) -> None:
 
@@ -239,15 +240,15 @@ class BTENTRY:
     BREF: 'BREF'
     btkey: int
 
-    def __init__(self, bytedata: bytes
+    def __init__(self, value_bytes: bytes
                  ) -> None:
 
-        if len(bytedata) == 12:  # ansi
-            self.btkey = panutils.unpack_integer('I', bytedata[:4])
-            self.BREF = BREF(bytedata[4:])
+        if len(value_bytes) == 12:  # ansi
+            self.btkey = panutils.unpack_integer('I', value_bytes[:4])
+            self.BREF = BREF(value_bytes[4:])
         else:  # unicode 24
-            self.btkey = panutils.unpack_integer('Q', bytedata[:8])
-            self.BREF = BREF(bytedata[8:])
+            self.btkey = panutils.unpack_integer('Q', value_bytes[:8])
+            self.BREF = BREF(value_bytes[8:])
 
     def __repr__(self) -> str:
 
@@ -372,6 +373,8 @@ class Block:
     wSig: int
     dwCRC: int
     data_block: bytes
+    lcbTotal: int
+    rgbid: list[BID]
 
     def __init__(self, value_bytes: bytes, offset: int, data_size: int, is_ansi: bool, bid_check, bCryptMethod: CryptMethodEnum) -> None:
 
@@ -427,8 +430,11 @@ class Block:
 
         else:  # XBLOCK, XXBLOCK, SLBLOCK or SIBLOCK
 
-            self.btype, self.cLevel, self.cEnt = struct.unpack(
+            btype, cLevel, cEnt = struct.unpack(
                 'BBH', value_bytes[:4])
+            self.btype = int(btype)
+            self.cLevel = int(cLevel)
+            self.cEnt = int(cEnt)
 
             if self.btype == 1:  # XBLOCK, XXBLOCK
                 self.lcbTotal = panutils.unpack_integer('I', value_bytes[4:8])
@@ -600,15 +606,19 @@ class HID:
 
     hidIndex: int
     hidBlockIndex: int
+    hidType: int
+    is_hid: bool
+    is_nid: bool
 
-    def __init__(self, value_bytes) -> None:
+    def __init__(self, value_bytes: bytes) -> None:
 
         # hidIndex cannot be zero, first 5 bits must be zero (hidType)
-        self.hidIndex, self.hidBlockIndex = struct.unpack('HH', value_bytes)
-        self.hidType: int = self.hidIndex & 0x1F
-        self.hidIndex = (self.hidIndex >> 5) & 0x7FF
-        self.is_hid: bool = True
-        self.is_nid: bool = False
+        hidIndex, hidBlockIndex = struct.unpack('HH', value_bytes)
+        self.hidBlockIndex = int(hidBlockIndex)
+        self.hidType = int(hidIndex) & 0x1F
+        self.hidIndex = (int(hidIndex) >> 5) & 0x7FF
+        self.is_hid = True
+        self.is_nid = False
 
 
 class HNPAGEMAP:
@@ -764,6 +774,7 @@ class BTH:
             for i in range(records):
                 key, data = struct.unpack('%ss%ss' % (
                     self.cbKey, self.cbEnt), value_bytes[i * record_size:(i + 1) * record_size])
+
                 bth_record_list.append(BTHData(key, data))
         else:  # intermediate
             record_size = self.cbKey + 4
@@ -897,8 +908,7 @@ class PType:
                 value_bytes)
             s: list[str] = []
             for i in range(ulCount):
-                s.append(value_bytes[rgulDataOffsets[i]
-                         :rgulDataOffsets[i + 1]].decode('utf-16-le'))
+                s.append(value_bytes[rgulDataOffsets[i]:rgulDataOffsets[i + 1]].decode('utf-16-le'))
             return s
         if self.ptype == PTypeEnum.PtypMultipleString8:
             ulCount, rgulDataOffsets = self.get_multi_value_offsets(
@@ -1284,7 +1294,7 @@ class TC:  # Table Context
             subnode_nid_bid)
         return ptype.value(b''.join(data_sectors))
 
-    def get_row_ID(self, RowIndex) -> int:
+    def get_row_ID(self, RowIndex: int) -> int:
 
         return self.RowIndex[RowIndex].dwRowID
 
