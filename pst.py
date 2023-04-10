@@ -237,16 +237,16 @@ class Page:
 
 class BTENTRY:
     BREF: 'BREF'
-    key: int
+    btkey: int
 
     def __init__(self, bytedata: bytes
                  ) -> None:
 
         if len(bytedata) == 12:  # ansi
-            self.key = panutils.unpack_integer('I', bytedata[:4])
+            self.btkey = panutils.unpack_integer('I', bytedata[:4])
             self.BREF = BREF(bytedata[4:])
         else:  # unicode 24
-            self.key = panutils.unpack_integer('Q', bytedata[:8])
+            self.btkey = panutils.unpack_integer('Q', bytedata[:8])
             self.BREF = BREF(bytedata[8:])
 
     def __repr__(self) -> str:
@@ -258,7 +258,6 @@ class BBTENTRY:
     BREF: 'BREF'
     cb: int
     cRef: int
-    key: int
 
     def __init__(self, value_bytes: bytes) -> None:
 
@@ -268,7 +267,6 @@ class BBTENTRY:
         else:  # unicode (24)
             self.BREF = BREF(value_bytes[:16])
             self.cb, self.cRef = struct.unpack('HH', value_bytes[16:20])
-        self.key = self.BREF.bid.bid
 
     def __repr__(self) -> str:
 
@@ -280,7 +278,6 @@ class NBTENTRY:
     bidData: BID
     bidSub: BID
     nidParent: NID
-    key: int
 
     def __init__(self, value_bytes: bytes) -> None:
 
@@ -294,7 +291,6 @@ class NBTENTRY:
         self.bidData = BID(bidData)
         self.bidSub = BID(bidSub)
         self.nidParent = NID(nidParent)
-        self.key = self.nid.nid
 
     def __repr__(self) -> str:
 
@@ -573,10 +569,15 @@ class NBD:
         leaf_entries: dict[int, NBTENTRY | BBTENTRY] = {}
         page: Page = self.fetch_page(page_offset)
         for entry in page.rgEntries:
-            if isinstance(entry, entry_type):
-                if entry.key in leaf_entries.keys():
+
+            if isinstance(entry, NBTENTRY):
+                if entry.nid.nid in leaf_entries.keys():
                     raise PSTException('Invalid Leaf Key %s' % entry)
-                leaf_entries[entry.key] = entry
+                leaf_entries[entry.nid.nid] = entry
+            elif isinstance(entry, BBTENTRY):
+                if entry.BREF.bid.bid in leaf_entries.keys():
+                    raise PSTException('Invalid Leaf Key %s' % entry)
+                leaf_entries[entry.BREF.bid.bid] = entry
             elif isinstance(entry, BTENTRY):
                 leaf_entries.update(self.get_page_leaf_entries(
                     entry_type, entry.BREF.ib))
