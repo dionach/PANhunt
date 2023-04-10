@@ -94,7 +94,7 @@ class PANFile:
 
         elif self.filetype == 'TEXT':
             try:
-                with open(self.path, 'r', encoding='ascii') as f:
+                with open(self.path, 'r', encoding='utf-8', errors='backslashreplace') as f:
                     file_text: str = f.read()
                     self.check_text_regexs(file_text, '', excluded_pans_list)
             # except WindowsError:
