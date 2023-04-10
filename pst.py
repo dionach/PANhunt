@@ -944,15 +944,17 @@ class PType:
 
     def unpack_list_int(self, value_bytes: bytes, bit_size: Literal[16, 32, 64]) -> list[int]:
         format_dict: dict[int, str] = {16: 'h', 32: 'i', 64: 'q'}
-        count: int = len(value_bytes) // (bit_size // 8)
+        buffer_size = (bit_size // 8)
+        count: int = len(value_bytes) // buffer_size
         return [panutils.unpack_integer(
-            format_dict[bit_size], value_bytes[i * count:(i + 1) * count]) for i in range(count)]
+            format_dict[bit_size], value_bytes[i * buffer_size:(i + 1) * buffer_size]) for i in range(count)]
 
     def unpack_list_float(self, value_bytes: bytes, bit_size: Literal[32, 64]) -> list[float]:
         format_dict: dict[int, str] = {32: 'f', 64: 'd'}
-        count: int = len(value_bytes) // (bit_size // 8)
+        buffer_size = (bit_size // 8)
+        count: int = len(value_bytes) // buffer_size
         return [panutils.unpack_float(
-            format_dict[bit_size], value_bytes[i * count:(i + 1) * count]) for i in range(count)]
+            format_dict[bit_size], value_bytes[i * buffer_size:(i + 1) * buffer_size]) for i in range(count)]
 
     def get_floating_time(self, time_bytes: bytes) -> dt.datetime:
 
@@ -1388,7 +1390,8 @@ class LTP:
 
     def get_tc_by_slentry(self, slentry: SLENTRY) -> TC:
 
-        block_data_list: list[bytes] = self.nbd.fetch_all_block_data(slentry.bidData)
+        block_data_list: list[bytes] = self.nbd.fetch_all_block_data(
+            slentry.bidData)
         # TODO: Solve HN with SLENTRY parameter
         hn: HN = HN(slentry, self, block_data_list)
 
@@ -1420,6 +1423,10 @@ class EntryID:
     nid: NID
 
     def __init__(self, value_bytes: bytes) -> None:
+
+        if len(value_bytes) > 24:
+            # raise ValueError("Invalid data")
+            return
 
         nid_bytes: bytes
         self.rgbFlags, self.uid, nid_bytes = struct.unpack(
@@ -1552,7 +1559,7 @@ class SubAttachment:
     AttachLongFilename: Optional[str]
     Filename: str
 
-    def __init__(self, nid: NID, AttachmentSize: int, AttachFilename: str, AttachLongFilename: Optional[str]) -> None:
+    def __init__(self, nid: NID, AttachmentSize: int, AttachFilename: Optional[str], AttachLongFilename: Optional[str]) -> None:
 
         self.nid, self.AttachmentSize, self.AttachFilename, self.AttachLongFilename = nid, AttachmentSize, AttachFilename, AttachLongFilename
         if self.AttachLongFilename:
@@ -1576,9 +1583,9 @@ class SubRecipient:
     AddressType: str
     EmailAddress: str
     DisplayType: int
-    EntryId: 'EntryID'
+    EntryId: Optional['EntryID']
 
-    def __init__(self, RecipientType: int, DisplayName: str, ObjectType: int, AddressType: str, EmailAddress: str, DisplayType: int, EntryId: 'EntryID') -> None:
+    def __init__(self, RecipientType: int, DisplayName: str, ObjectType: int, AddressType: str, EmailAddress: str, DisplayType: int, EntryId: Optional['EntryID'] = None) -> None:
 
         self.RecipientType, self.DisplayName, self.ObjectType, self.AddressType, self.EmailAddress, self.DisplayType, self.EntryId = RecipientType, DisplayName, ObjectType, AddressType, EmailAddress, DisplayType, EntryId
 
@@ -1645,12 +1652,6 @@ class Message:
             panutils.as_str(self.pc.getval(PropIdEnum.PidTagSubjectW.value).value))
         self.ClientSubmitTime: dt.datetime = panutils.as_datetime(self.pc.getval(
             PropIdEnum.PidTagClientSubmitTime.value).value)
-        self.SentRepresentingName: str = panutils.as_str(self.pc.getval(
-            PropIdEnum.PidTagSentRepresentingNameW.value).value)
-        self.SenderName: str = panutils.as_str(self.pc.getval(
-            PropIdEnum.PidTagSenderName.value).value)
-        self.SenderSmtpAddress: str = panutils.as_str(self.pc.getval(
-            PropIdEnum.PidTagSenderSmtpAddress.value).value)
         self.MessageDeliveryTime: dt.datetime = panutils.as_datetime(self.pc.getval(
             PropIdEnum.PidTagMessageDeliveryTime.value).value)
         self.MessageFlags: int = panutils.as_int(self.pc.getval(
@@ -1681,11 +1682,28 @@ class Message:
         if b:
             self.Body = panutils.as_str(
                 b.value)
+
         # Optional property
         x = self.pc.getval(
             PropIdEnum.PidTagXOriginatingIP.value)
         if x:
             self.XOriginatingIP = panutils.as_str(x.value)  # x-originating-ip
+
+        # Null if imported
+        ssa = self.pc.getval(
+            PropIdEnum.PidTagSenderSmtpAddress.value)
+        if ssa:
+            self.SenderSmtpAddress: str = panutils.as_str(ssa.value)
+
+        # Null if meeting invitation
+        srn = self.pc.getval(PropIdEnum.PidTagSentRepresentingNameW.value)
+        if srn:
+            self.SentRepresentingName: str = panutils.as_str(srn.value)
+
+        sn = self.pc.getval(
+            PropIdEnum.PidTagSenderName.value)
+        if sn:
+            self.SenderName: str = panutils.as_str(sn.value)
 
         self.tc_attachments = None
         self.tc_recipients = None
@@ -1718,9 +1736,12 @@ class Message:
                     i, PropIdEnum.PidTagEmailAddress))
                 display_type: int = panutils.as_int(self.tc_recipients.getval(
                     i, PropIdEnum.PidTagDisplayType))
-                value_bytes: bytes = panutils.as_binary(self.tc_recipients.getval(
-                    i, PropIdEnum.PidTagEntryID))
-                entryId: EntryID = EntryID(value_bytes)
+                entryId: Optional[EntryID] = None
+                eid: _ValueType = self.tc_recipients.getval(
+                    i, PropIdEnum.PidTagEntryID)
+                if eid:
+                    value_bytes: bytes = panutils.as_binary(eid)
+                    entryId = EntryID(value_bytes)
                 subrecipients.append(SubRecipient(
                     r_type, display_name, obj_type, add_type, email_address, display_type, entryId))
 
@@ -1733,14 +1754,20 @@ class Message:
                 nid: NID = self.tc_attachments.RowIndex[i].nid
                 size: int = panutils.as_int(self.tc_attachments.getval(
                     i, PropIdEnum.PidTagAttachmentSize))
-                filename: str = panutils.as_str(self.tc_attachments.getval(
-                    i, PropIdEnum.PidTagAttachFilename))
-                long_filename: Optional[str] = None
+
+                filename: Optional[str] = None
                 fn: _ValueType = self.tc_attachments.getval(
-                    i, PropIdEnum.PidTagAttachLongFilename)
+                    i, PropIdEnum.PidTagAttachFilename)
 
                 if fn:
-                    long_filename = panutils.as_str(fn)
+                    filename = panutils.as_str(fn)
+
+                long_filename: Optional[str] = None
+                lfn: _ValueType = self.tc_attachments.getval(
+                    i, PropIdEnum.PidTagAttachLongFilename)
+
+                if lfn:
+                    long_filename = panutils.as_str(lfn)
 
                 subattachments.append(SubAttachment(
                     nid, size, filename, long_filename))
