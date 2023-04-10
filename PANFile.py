@@ -1,4 +1,5 @@
 import io
+import logging
 import os
 import sys
 import zipfile
@@ -8,6 +9,7 @@ from typing import Generator, Optional
 import msmsg
 import panutils
 import pst
+from exceptions import PANHuntException
 from PAN import PAN
 from patterns import CardPatternSingleton
 
@@ -71,6 +73,7 @@ class PANFile:
             self.errors = [error_msg]
         else:
             self.errors.append(error_msg)
+        logging.error(error_msg)
 
     def check_regexs(self, excluded_pans_list: list[str], search_extensions: dict[str, list[str]]) -> list[PAN]:
         """Checks the file for matching regular expressions: if a ZIP then each file in the ZIP (recursively) or the text in a document"""
@@ -117,6 +120,8 @@ class PANFile:
                 except Exception:
                     self.set_error(str(sys.exc_info()[1]))
 
+        logging.info(
+            f'Found {len(self.matches)} possible PANs in {self.path}')
         return self.matches
 
     def check_text_regexs(self, text: str, sub_path: str, excluded_pans_list: list[str]) -> None:

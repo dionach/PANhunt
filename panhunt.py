@@ -12,6 +12,8 @@
 import argparse
 import hashlib
 import locale
+import logging
+from math import log
 import os
 import platform
 import sys
@@ -128,7 +130,7 @@ class Hunter:
                 extension_types[ext] = ext_type
 
         self.pbar = MainProgressbar()
-        # TODO: move progressbarr update methods here
+        # TODO: move progressbar update methods here
         self.pbar.create('Doc')
 
         doc_files: list[PANFile] = []
@@ -251,7 +253,15 @@ class Hunter:
 #
 ###################################################################################################################################
 
+
 def main() -> None:
+    logging.basicConfig(filename='PANhunt.log',
+                        encoding='utf-8',
+                        format='%(asctime)s %(message)s',
+                        level=logging.DEBUG)
+
+    excepthook = logging.error
+    logging.info('Starting')
 
     colorama.init()
 
@@ -330,9 +340,7 @@ def main() -> None:
 if __name__ == "__main__":
     try:
         main()
-    except PANHuntException as ph:
-        print(colorama.Fore.RED +
-              panutils.unicode_to_ascii(f'ERROR: {str(ph)}') + colorama.Fore.WHITE)
+        logging.info('Exiting')
     except KeyboardInterrupt:
         print('Cancelled by user.')
         try:
@@ -341,6 +349,7 @@ if __name__ == "__main__":
             os._exit(0)
     except Exception as ex:
         print('ERROR: ' + str(ex))
+        logging.info('Exiting')
         try:
             sys.exit(1)
         except SystemExit:

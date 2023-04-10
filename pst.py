@@ -11,6 +11,7 @@
 import argparse
 import datetime as dt
 import itertools
+import logging
 import math
 import os
 import string
@@ -913,8 +914,7 @@ class PType:
                 value_bytes)
             s: list[str] = []
             for i in range(ulCount):
-                s.append(value_bytes[rgulDataOffsets[i]
-                         :rgulDataOffsets[i + 1]].decode('utf-16-le'))
+                s.append(value_bytes[rgulDataOffsets[i]:rgulDataOffsets[i + 1]].decode('utf-16-le'))
             return s
         if self.ptype == PTypeEnum.PtypMultipleString8:
             ulCount, rgulDataOffsets = self.get_multi_value_offsets(
@@ -1399,59 +1399,54 @@ class Folder:
 
     def __init__(self, nid: NID, ltp: LTP, parent_path='', messaging: Optional['Messaging'] = None) -> None:
 
-        if nid.nidType != NID.NID_TYPE_NORMAL_FOLDER:
-            raise PANHuntException('Invalid Folder NID Type: %s' % nid.nidType)
-        self.pc = ltp.get_pc_by_nid(nid)
-        self.DisplayName = panutils.as_str(self.pc.getval(
-            PropIdEnum.PidTagDisplayName.value).value)
-        self.path = parent_path + '\\' + self.DisplayName
-
-        # print('FOLDER DEBUG', self.DisplayName, self.pc)
-
-        # entryids in PST are stored as nids
-        if messaging:
-            self.EntryId = 4 * b'\x00' + \
-                messaging.store_record_key + struct.pack('I', nid.nid)
-
-        self.ContentCount = panutils.as_int(self.pc.getval(
-            PropIdEnum.PidTagContentCount.value).value)
-
-        cc = self.pc.getval(
-            PropIdEnum.PidTagContainerClass.value)
-        if cc:
-            ccv = cc.value
-            self.ContainerClass = panutils.as_str(ccv)
-
-        self.HasSubfolders = panutils.as_int(self.pc.getval(
-            PropIdEnum.PidTagSubfolders.value).value) == 1
-
-        nid_hierarchy: NID = NID(nid.nidIndex | NID.NID_TYPE_HIERARCHY_TABLE)
-        nid_contents: NID = NID(nid.nidIndex | NID.NID_TYPE_CONTENTS_TABLE)
-        # FAI = Folder Associated Information
-        nid_fai: NID = NID(nid.nidIndex | NID.NID_TYPE_ASSOC_CONTENTS_TABLE)
-
         try:
+            if nid.nidType != NID.NID_TYPE_NORMAL_FOLDER:
+                raise PANHuntException(
+                    'Invalid Folder NID Type: %s' % nid.nidType)
+            self.pc = ltp.get_pc_by_nid(nid)
+            self.DisplayName = panutils.as_str(self.pc.getval(
+                PropIdEnum.PidTagDisplayName.value).value)
+            self.path = parent_path + '\\' + self.DisplayName
+
+            # print('FOLDER DEBUG', self.DisplayName, self.pc)
+
+            # entryids in PST are stored as nids
+            if messaging:
+                self.EntryId = 4 * b'\x00' + \
+                    messaging.store_record_key + struct.pack('I', nid.nid)
+
+            self.ContentCount = panutils.as_int(self.pc.getval(
+                PropIdEnum.PidTagContentCount.value).value)
+
+            cc = self.pc.getval(
+                PropIdEnum.PidTagContainerClass.value)
+            if cc:
+                ccv = cc.value
+                self.ContainerClass = panutils.as_str(ccv)
+
+            self.HasSubfolders = panutils.as_int(self.pc.getval(
+                PropIdEnum.PidTagSubfolders.value).value) == 1
+
+            nid_hierarchy: NID = NID(
+                nid.nidIndex | NID.NID_TYPE_HIERARCHY_TABLE)
+            nid_contents: NID = NID(nid.nidIndex | NID.NID_TYPE_CONTENTS_TABLE)
+            # FAI = Folder Associated Information
+            nid_fai: NID = NID(
+                nid.nidIndex | NID.NID_TYPE_ASSOC_CONTENTS_TABLE)
+
             self.tc_hierarchy = None
             self.subfolders = []
             self.tc_hierarchy = ltp.get_tc_by_nid(nid_hierarchy)
             self.subfolders = [SubFolder(self.tc_hierarchy.RowIndex[RowIndex].nid, panutils.as_str(self.tc_hierarchy.getval(
                 RowIndex, PropIdEnum.PidTagDisplayName)), self.path) for RowIndex in range(len(self.tc_hierarchy.RowIndex))]
-        except PANHuntException as e:
-            log_error(e)
-
-        try:
             self.tc_contents = None
             self.submessages = []
             self.tc_contents = ltp.get_tc_by_nid(nid_contents)
             self.submessages = self.__get_submessages(ltp)
-        except PANHuntException as e:
-            log_error(e)
-
-        try:
             self.tc_fai = None
             self.tc_fai = ltp.get_tc_by_nid(nid_fai)
         except PANHuntException as e:
-            log_error(e)
+            logging.error(e)
 
     def __get_submessages(self, ltp) -> list[SubMessage]:
         submessages: list[SubMessage] = []
@@ -1474,14 +1469,6 @@ class Folder:
                                     Subject=subject, ClientSubmitTime=cst)
                     submessages.append(sm)
         return submessages
-
-        # self.submessages = [SubMessage(self.tc_contents.RowIndex[RowIndex].nid,
-        #                                    panutils.as_str(self.tc_contents.getval(
-        #                                        RowIndex, PropIdEnum.PidTagSentRepresentingNameW) or "default"),
-        #                                    ltp.strip_SubjectPrefix(
-        #                                        panutils.as_str(self.tc_contents.getval(RowIndex, PropIdEnum.PidTagSubjectW) or "default")),
-        #                                    panutils.as_datetime(self.tc_contents.getval(RowIndex, PropIdEnum.PidTagClientSubmitTime)))
-        #                         for RowIndex in range(len(self.tc_contents.RowIndex)) if RowIndex in list(self.tc_contents.RowIndex.keys())]
 
     def __repr__(self) -> str:
 
@@ -1860,11 +1847,12 @@ class Messaging:
     def __init__(self, ltp: LTP) -> None:
 
         self.ltp = ltp
-        self.set_message_store()
+
         try:
+            self.set_message_store()
             self.set_name_to_id_map()
         except PANHuntException as e:
-            log_error(e)
+            logging.error(e)
 
     def set_message_store(self) -> None:
 
@@ -2418,24 +2406,19 @@ class PST:
 
         while subfolder_stack:
             subfolder: SubFolder = subfolder_stack.pop()
-            try:
-                folder: Folder = Folder(subfolder.nid, self.ltp,
-                                        subfolder.parent_path, self.messaging)
-                subfolder_stack.extend(folder.subfolders)
-                yield folder
-            except PANHuntException as e:
-                log_error(e)
+            folder: Folder = Folder(subfolder.nid, self.ltp,
+                                    subfolder.parent_path, self.messaging)
+            subfolder_stack.extend(folder.subfolders)
+            yield folder
 
     def message_generator(self, folder: Folder) -> Generator[Message, None, None]:
 
         try:
             for submessage in folder.submessages:
-                try:
-                    message: Message = Message(submessage.nid, self.ltp,
-                                               messaging=self.messaging)
-                    yield message
-                except PANHuntException as e:
-                    log_error(e)
+                message: Message = Message(submessage.nid, self.ltp,
+                                           messaging=self.messaging)
+                yield message
+
         except GeneratorExit:
             pass
         finally:
@@ -2560,15 +2543,6 @@ def get_unused_filename(filepath: str) -> str:
         return '%s-%s%s' % (os.path.splitext(filepath)
                             [0], suffix, os.path.splitext(filepath)[1])
     return filepath
-
-
-def log_error(e: BaseException) -> None:
-    # TODO: Use a general error logging and display mechanism
-    # global error_log_list
-    # error_log_list.append(e.message)
-    # Implement a logging solution
-    sys.stderr.write(str(e) + '\n')
-
 
 ###############################################################################################################################
 #
