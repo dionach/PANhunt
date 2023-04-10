@@ -11,9 +11,8 @@
 
 import argparse
 import hashlib
-import locale
+import json
 import logging
-from math import log
 import os
 import platform
 import sys
@@ -24,7 +23,6 @@ import colorama
 
 import panutils
 from config import PANHuntConfigSingleton
-from exceptions import PANHuntException
 from PAN import PAN
 from PANFile import PANFile
 from pbar import FileProgressbar, MainProgressbar
@@ -103,6 +101,39 @@ class Hunter:
             f.write(pan_report)
 
         self.__append_hash(PANHuntConfigSingleton.instance().output_file)
+
+    def output_json_report(self, all_files: list[PANFile], total_files_searched: int, pans_found: int) -> None:
+
+        if PANHuntConfigSingleton.instance().json_path is None:
+            return
+
+        report: dict = {}
+        report['timestamp'] = time.strftime("%H:%M:%S %d/%m/%Y")
+        report['searched'] = PANHuntConfigSingleton.instance().search_dir
+        report['excluded'] = ','.join(
+            PANHuntConfigSingleton.instance().excluded_directories)
+        report['command'] = ' '.join(sys.argv)
+        report['total_files'] = total_files_searched
+        report['pans_found'] = pans_found
+        report['pans_found_results'] = []
+        for pan_file in sorted([pan_file for pan_file in all_files if pan_file.matches], key=lambda x: x.filename):
+            report['pans_found_results'].append(
+                (pan_file.filename, [pan.get_masked_pan() for pan in pan_file.matches]))
+
+        interesting_files: list[PANFile] = sorted([
+            pan_file for pan_file in all_files if pan_file.filetype == 'OTHER'], key=lambda x: x.filename)
+        if len(interesting_files) != 0:
+            report['interesting_files']['total'] = len(interesting_files)
+
+            report['interesting_files']['files'] = [
+                f.filename for f in interesting_files]
+
+        text: str = json.dumps(report, sort_keys=True)
+        hash_check: str = self.__get_text_hash(text)
+        report['hash'] = hash_check
+        json_report: str = json.dumps(report)
+        with open(PANHuntConfigSingleton.instance().json_path, "w") as f:  # type: ignore
+            f.write(json_report)
 
     def check_file_hash(self, text_file: str) -> None:
 
@@ -295,6 +326,10 @@ def main() -> None:
         '-C', dest='config', help='configuration file to use')
     arg_parser.add_argument(
         '-X', dest='exclude_pan', help='PAN to exclude from search')
+
+    arg_parser.add_argument(
+        '-j', dest='json_path', help='Create JSON formatted report')
+
     arg_parser.add_argument('-c', dest='check_file_hash',
                             help=argparse.SUPPRESS)  # hidden argument
 
@@ -315,6 +350,7 @@ def main() -> None:
     other_extensions_string = str(args.other_files)
     mask_pans: bool = not args.unmask
     excluded_pans_string = str(args.exclude_pan)
+    json_path = str(args.json_path)
     config_file = str(args.config)
 
     # The singleton is initiated at the first call with the hardcoded default values.
@@ -333,13 +369,17 @@ def main() -> None:
                                                 special_extensions_string=special_extensions_string,
                                                 mail_extensions_string=mail_extensions_string,
                                                 other_extensions_string=other_extensions_string,
-                                                excluded_pans_string=excluded_pans_string)
+                                                excluded_pans_string=excluded_pans_string,
+                                                json_path=json_path)
 
     total_files_searched, pans_found, all_files = hunter.hunt_pans()
 
     # report findings
     hunter.output_report(all_files,
                          total_files_searched, pans_found)
+
+    if json_path:
+        hunter.output_json_report(all_files, total_files_searched, pans_found)
 
 
 if __name__ == "__main__":
