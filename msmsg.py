@@ -568,9 +568,11 @@ class Attachment:
             self.AttachMimeTag = panutils.as_str(amt.value)
 
     def __str__(self) -> str:
-
+        size: int = 0
+        if self.BinaryData:
+            size = len(self.BinaryData)
         return f"{self.Filename} ({panutils.size_friendly(self.AttachmentSize)} \
-        / {panutils.size_friendly(len(self.BinaryData))})"
+        / {panutils.size_friendly(size)})"
 
 
 class MSMSG:
@@ -787,7 +789,7 @@ def test_folder_msgs(folder_path: str) -> None:
         dump_attachments: bool = False
         if dump_attachments:
             for attachment in msg.attachments:
-                if len(attachment.BinaryData) != 0:
+                if attachment.BinaryData and len(attachment.BinaryData) != 0:
                     filepath: str = os.path.join(
                         folder_path, attachment.Filename)
                     with open(filepath, 'wb', encoding='ascii') as f:

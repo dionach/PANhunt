@@ -2446,7 +2446,7 @@ class PST:
                         attachment = message.get_attachment(
                             subattachment)
                         if attachment:
-                            if len(attachment.BinaryData) != 0:
+                            if attachment.BinaryData and len(attachment.BinaryData) != 0:
                                 filepath: str = os.path.join(
                                     path, attachment.Filename)
                                 if overwrite:
