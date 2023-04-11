@@ -814,7 +814,7 @@ class PCBTHData:
         self.wPropType = wPropType
         self.dwValueHnid: bytes = dwValueHnid
 
-        ptype: PType = hn.ltp.ptypes[PTypeEnum(self.wPropType)]
+        ptype: PstPTypeWrapper = hn.ltp.ptypes[PTypeEnum(self.wPropType)]
 
         if not ptype.is_variable and not ptype.is_multi:
             if ptype.byte_count <= 4:
@@ -842,7 +842,7 @@ class PCBTHData:
         return '%s (%s) = %s' % (hex(self.wPropId), hex(self.wPropType), repr(self.value))
 
 
-class PType:
+class PstPTypeWrapper:
 
     ptype: PTypeEnum
     byte_count: int
@@ -856,8 +856,8 @@ class PType:
     def value(self, value_bytes: bytes) -> _ValueType:
         """value_bytes is normally a string of bytes, but if multi and variable, bytes is a list of bytes"""
 
-        ulCount: int
-        rgulDataOffsets: list[int]
+        ul_count: int
+        rgul_data_offsets: list[int]
         data_list: list[bytes]
 
         if self.ptype == PTypeEnum.PtypInteger16:
@@ -919,19 +919,20 @@ class PType:
         if self.ptype == PTypeEnum.PtypMultipleInteger64:
             self.unpack_list_int(value_bytes=value_bytes, bit_size=64)
         if self.ptype == PTypeEnum.PtypMultipleString:
-            ulCount, rgulDataOffsets = self.get_multi_value_offsets(
+            ul_count, rgul_data_offsets = self.get_multi_value_offsets(
                 value_bytes)
             s: list[str] = []
-            for i in range(ulCount):
-                s.append(value_bytes[rgulDataOffsets[i]:rgulDataOffsets[i + 1]].decode('utf-16-le'))
+            for i in range(ul_count):
+                s.append(
+                    value_bytes[rgul_data_offsets[i]:rgul_data_offsets[i + 1]].decode('utf-16-le'))
             return s
         if self.ptype == PTypeEnum.PtypMultipleString8:
-            ulCount, rgulDataOffsets = self.get_multi_value_offsets(
+            ul_count, rgul_data_offsets = self.get_multi_value_offsets(
                 value_bytes)
             data_list = []
-            for i in range(ulCount):
+            for i in range(ul_count):
                 data_list.append(
-                    value_bytes[rgulDataOffsets[i]:rgulDataOffsets[i + 1]])
+                    value_bytes[rgul_data_offsets[i]:rgul_data_offsets[i + 1]])
             return data_list
         if self.ptype == PTypeEnum.PtypMultipleTime:
             count = len(value_bytes) // 8
@@ -940,12 +941,12 @@ class PType:
             count = len(value_bytes) // 16
             return [value_bytes[i * 16:(i + 1) * 16] for i in range(count)]
         if self.ptype == PTypeEnum.PtypMultipleBinary:
-            ulCount, rgulDataOffsets = self.get_multi_value_offsets(
+            ul_count, rgul_data_offsets = self.get_multi_value_offsets(
                 value_bytes)
             data_list = []
-            for i in range(ulCount):
+            for i in range(ul_count):
                 data_list.append(
-                    value_bytes[rgulDataOffsets[i]:rgulDataOffsets[i + 1]])
+                    value_bytes[rgul_data_offsets[i]:rgul_data_offsets[i + 1]])
             return data_list
         if self.ptype == PTypeEnum.PtypUnspecified:
             return value_bytes
@@ -981,12 +982,12 @@ class PType:
 
     def get_multi_value_offsets(self, value_bytes: bytes) -> tuple[int, list[int]]:
 
-        ulCount: int = panutils.unpack_integer('I', value_bytes[:4])
-        rgulDataOffsets: list[int] = [panutils.unpack_integer(
-            'I', value_bytes[(i + 1) * 4:(i + 2) * 4]) for i in range(ulCount)]
+        ul_count: int = panutils.unpack_integer('I', value_bytes[:4])
+        rgul_data_offsets: list[int] = [panutils.unpack_integer(
+            'I', value_bytes[(i + 1) * 4:(i + 2) * 4]) for i in range(ul_count)]
 
-        rgulDataOffsets.append(len(value_bytes))
-        return ulCount, rgulDataOffsets
+        rgul_data_offsets.append(len(value_bytes))
+        return ul_count, rgul_data_offsets
 
 
 class PC:  # Property Context
@@ -1017,13 +1018,11 @@ class PC:  # Property Context
                 pc_property.value = entryId
             self.properties[pc_property.wPropId] = pc_property
 
-    # TODO: Use Optional
-    def getval(self, propid: int) -> PCBTHData:  # type: ignore
+    def get_raw_data(self, propid: int) -> Optional[PCBTHData]:
 
         if propid in self.properties:
             return self.properties[propid]
-
-        # raise IndexError(f'Invalid propid {propid}')
+        return None
 
     def __repr__(self) -> str:
 
@@ -1191,7 +1190,8 @@ class TC:  # Table Context
         if data_bytes is None:
             return None
 
-        ptype: PType = self.hn.ltp.ptypes[PTypeEnum(tcoldesc.wPropType)]
+        ptype: PstPTypeWrapper = self.hn.ltp.ptypes[PTypeEnum(
+            tcoldesc.wPropType)]
         hid: HID
 
         if not ptype.is_variable and not ptype.is_multi:
@@ -1220,13 +1220,13 @@ class TC:  # Table Context
 
         return self.RowIndex[RowIndex].dwRowID
 
-    def getval(self, RowIndex: int, wPropId: PropIdEnum) -> _ValueType:
+    def get_context_value(self, row_index: int, prop_id: PropIdEnum) -> _ValueType:
 
-        dwRowID: int = self.get_row_ID(RowIndex)
-        rowvals: dict[int,
-                      _ValueType] = self.RowMatrix[dwRowID]
-        if wPropId.value in rowvals.keys():
-            return rowvals[wPropId.value]
+        row_id: int = self.get_row_ID(row_index)
+        row_values: dict[int,
+                         _ValueType] = self.RowMatrix[row_id]
+        if prop_id.value in row_values.keys():
+            return row_values[prop_id.value]
         return None
 
     def __repr__(self) -> str:
@@ -1246,39 +1246,40 @@ class LTP:
 
         self.nbd: NBD = nbd
 
-        self.ptypes: dict[PTypeEnum, PType] = {
-            PTypeEnum.PtypInteger16: PType(PTypeEnum.PtypInteger16, 2, False, False),
-            PTypeEnum.PtypInteger32: PType(PTypeEnum.PtypInteger32, 4, False, False),
-            PTypeEnum.PtypFloating32: PType(PTypeEnum.PtypFloating32, 4, False, False),
-            PTypeEnum.PtypFloating64: PType(PTypeEnum.PtypFloating64, 8, False, False),
-            PTypeEnum.PtypCurrency: PType(PTypeEnum.PtypCurrency, 8, False, False),
-            PTypeEnum.PtypFloatingTime: PType(PTypeEnum.PtypFloatingTime, 8, False, False),
-            PTypeEnum.PtypErrorCode: PType(PTypeEnum.PtypErrorCode, 4, False, False),
-            PTypeEnum.PtypBoolean: PType(PTypeEnum.PtypBoolean, 1, False, False),
-            PTypeEnum.PtypInteger64: PType(PTypeEnum.PtypInteger64, 8, False, False),
-            PTypeEnum.PtypString: PType(PTypeEnum.PtypString, 0, True, False),
-            PTypeEnum.PtypString8: PType(PTypeEnum.PtypString8, 0, True, False),
-            PTypeEnum.PtypTime: PType(PTypeEnum.PtypTime, 8, False, False),
-            PTypeEnum.PtypGuid: PType(PTypeEnum.PtypGuid, 16, False, False),
-            PTypeEnum.PtypServerId: PType(PTypeEnum.PtypServerId, 2, False, True),
-            PTypeEnum.PtypRestriction: PType(PTypeEnum.PtypRestriction, 0, True, False),
-            PTypeEnum.PtypRuleAction: PType(PTypeEnum.PtypRuleAction, 2, False, True),
-            PTypeEnum.PtypBinary: PType(PTypeEnum.PtypBinary, 2, False, True),
-            PTypeEnum.PtypMultipleInteger16: PType(PTypeEnum.PtypMultipleInteger16, 2, False, True),
-            PTypeEnum.PtypMultipleInteger32: PType(PTypeEnum.PtypMultipleInteger32, 2, False, True),
-            PTypeEnum.PtypMultipleFloating32: PType(PTypeEnum.PtypMultipleFloating32, 2, False, True),
-            PTypeEnum.PtypMultipleFloating64: PType(PTypeEnum.PtypMultipleFloating64, 2, False, True),
-            PTypeEnum.PtypMultipleCurrency: PType(PTypeEnum.PtypMultipleCurrency, 2, False, True),
-            PTypeEnum.PtypMultipleFloatingTime: PType(PTypeEnum.PtypMultipleFloatingTime, 2, False, True),
-            PTypeEnum.PtypMultipleInteger64: PType(PTypeEnum.PtypMultipleInteger64, 2, False, True),
-            PTypeEnum.PtypMultipleString: PType(PTypeEnum.PtypMultipleString, 2, True, True),
-            PTypeEnum.PtypMultipleString8: PType(PTypeEnum.PtypMultipleString8, 2, True, True),
-            PTypeEnum.PtypMultipleTime: PType(PTypeEnum.PtypMultipleTime, 2, False, True),
-            PTypeEnum.PtypMultipleGuid: PType(PTypeEnum.PtypMultipleGuid, 2, False, True),
-            PTypeEnum.PtypMultipleBinary: PType(PTypeEnum.PtypMultipleBinary, 2, False, True),
-            PTypeEnum.PtypUnspecified: PType(PTypeEnum.PtypUnspecified, 0, False, False),
-            PTypeEnum.PtypNull: PType(PTypeEnum.PtypNull, 0, False, False),
-            PTypeEnum.PtypObject: PType(PTypeEnum.PtypObject, 4, False, True)
+        self.ptypes: dict[PTypeEnum, PstPTypeWrapper] = {
+            PTypeEnum.PtypInteger16: PstPTypeWrapper(PTypeEnum.PtypInteger16, 2, False, False),
+            PTypeEnum.PtypInteger32: PstPTypeWrapper(PTypeEnum.PtypInteger32, 4, False, False),
+            PTypeEnum.PtypFloating32: PstPTypeWrapper(PTypeEnum.PtypFloating32, 4, False, False),
+            PTypeEnum.PtypFloating64: PstPTypeWrapper(PTypeEnum.PtypFloating64, 8, False, False),
+            PTypeEnum.PtypCurrency: PstPTypeWrapper(PTypeEnum.PtypCurrency, 8, False, False),
+            PTypeEnum.PtypFloatingTime: PstPTypeWrapper(PTypeEnum.PtypFloatingTime, 8, False, False),
+            PTypeEnum.PtypErrorCode: PstPTypeWrapper(PTypeEnum.PtypErrorCode, 4, False, False),
+            PTypeEnum.PtypBoolean: PstPTypeWrapper(PTypeEnum.PtypBoolean, 1, False, False),
+            PTypeEnum.PtypInteger64: PstPTypeWrapper(PTypeEnum.PtypInteger64, 8, False, False),
+            PTypeEnum.PtypString: PstPTypeWrapper(PTypeEnum.PtypString, 0, True, False),
+            PTypeEnum.PtypString8: PstPTypeWrapper(PTypeEnum.PtypString8, 0, True, False),
+            PTypeEnum.PtypTime: PstPTypeWrapper(PTypeEnum.PtypTime, 8, False, False),
+            PTypeEnum.PtypGuid: PstPTypeWrapper(PTypeEnum.PtypGuid, 16, False, False),
+            PTypeEnum.PtypServerId: PstPTypeWrapper(PTypeEnum.PtypServerId, 2, False, True),
+            PTypeEnum.PtypRestriction: PstPTypeWrapper(PTypeEnum.PtypRestriction, 0, True, False),
+            PTypeEnum.PtypRuleAction: PstPTypeWrapper(PTypeEnum.PtypRuleAction, 2, False, True),
+            PTypeEnum.PtypBinary: PstPTypeWrapper(PTypeEnum.PtypBinary, 2, False, True),
+            PTypeEnum.PtypMultipleInteger16: PstPTypeWrapper(PTypeEnum.PtypMultipleInteger16, 2, False, True),
+            PTypeEnum.PtypMultipleInteger32: PstPTypeWrapper(PTypeEnum.PtypMultipleInteger32, 2, False, True),
+            PTypeEnum.PtypMultipleFloating32: PstPTypeWrapper(PTypeEnum.PtypMultipleFloating32, 2, False, True),
+            PTypeEnum.PtypMultipleFloating64: PstPTypeWrapper(PTypeEnum.PtypMultipleFloating64, 2, False, True),
+            PTypeEnum.PtypMultipleCurrency: PstPTypeWrapper(PTypeEnum.PtypMultipleCurrency, 2, False, True),
+            PTypeEnum.PtypMultipleFloatingTime: PstPTypeWrapper(PTypeEnum.PtypMultipleFloatingTime, 2, False, True),
+            PTypeEnum.PtypMultipleInteger64: PstPTypeWrapper(PTypeEnum.PtypMultipleInteger64, 2, False, True),
+            PTypeEnum.PtypMultipleString: PstPTypeWrapper(PTypeEnum.PtypMultipleString, 2, True, True),
+            PTypeEnum.PtypMultipleString8: PstPTypeWrapper(PTypeEnum.PtypMultipleString8, 2, True, True),
+            PTypeEnum.PtypMultipleTime: PstPTypeWrapper(PTypeEnum.PtypMultipleTime, 2, False, True),
+            PTypeEnum.PtypMultipleGuid: PstPTypeWrapper(PTypeEnum.PtypMultipleGuid, 2, False, True),
+            PTypeEnum.PtypMultipleBinary: PstPTypeWrapper(PTypeEnum.PtypMultipleBinary, 2, False, True),
+            PTypeEnum.PtypUnspecified: PstPTypeWrapper(PTypeEnum.PtypUnspecified, 0, False, False),
+            PTypeEnum.PtypNull: PstPTypeWrapper(PTypeEnum.PtypNull, 0, False, False),
+            PTypeEnum.PtypObject: PstPTypeWrapper(
+                PTypeEnum.PtypObject, 4, False, True)
         }
 
     def get_pc_by_nid(self, nid: NID) -> PC:
@@ -1378,12 +1379,12 @@ class SubMessage:
     Subject: Optional[str]
     ClientSubmitTime: Optional[dt.datetime]
 
-    def __init__(self, nid: NID, SentRepresentingName: Optional[str], Subject: Optional[str], ClientSubmitTime: Optional[dt.datetime]) -> None:
+    def __init__(self, nid: NID, sent_representing_name: Optional[str], subject: Optional[str], client_submit_time: Optional[dt.datetime]) -> None:
 
         self.nid = nid
-        self.SentRepresentingName = SentRepresentingName
-        self.Subject = Subject
-        self.ClientSubmitTime = ClientSubmitTime
+        self.SentRepresentingName = sent_representing_name
+        self.Subject = subject
+        self.ClientSubmitTime = client_submit_time
 
     def __repr__(self) -> str:
 
@@ -1413,28 +1414,33 @@ class Folder:
                 raise PANHuntException(
                     'Invalid Folder NID Type: %s' % nid.nidType)
             self.pc = ltp.get_pc_by_nid(nid)
-            self.DisplayName = panutils.as_str(self.pc.getval(
-                PropIdEnum.PidTagDisplayName.value).value)
-            self.path = parent_path + '\\' + self.DisplayName
 
-            # print('FOLDER DEBUG', self.DisplayName, self.pc)
+            dn = self.pc.get_raw_data(
+                PropIdEnum.PidTagDisplayName.value)
+            if dn:
+                self.DisplayName = panutils.as_str(dn.value)
+            self.path = parent_path + '\\' + self.DisplayName
 
             # entryids in PST are stored as nids
             if messaging:
                 self.EntryId = 4 * b'\x00' + \
                     messaging.store_record_key + struct.pack('I', nid.nid)
 
-            self.ContentCount = panutils.as_int(self.pc.getval(
-                PropIdEnum.PidTagContentCount.value).value)
+            cc = self.pc.get_raw_data(
+                PropIdEnum.PidTagContentCount.value)
+            if cc:
+                self.ContentCount = panutils.as_int(cc.value)
 
-            cc = self.pc.getval(
+            cc = self.pc.get_raw_data(
                 PropIdEnum.PidTagContainerClass.value)
             if cc:
                 ccv = cc.value
                 self.ContainerClass = panutils.as_str(ccv)
 
-            self.HasSubfolders = panutils.as_int(self.pc.getval(
-                PropIdEnum.PidTagSubfolders.value).value) == 1
+            hsf = self.pc.get_raw_data(
+                PropIdEnum.PidTagSubfolders.value)
+            if hsf:
+                self.HasSubfolders = panutils.as_int(hsf.value) == 1
 
             nid_hierarchy: NID = NID(
                 nid.nidIndex | NID.NID_TYPE_HIERARCHY_TABLE)
@@ -1446,7 +1452,7 @@ class Folder:
             self.tc_hierarchy = None
             self.subfolders = []
             self.tc_hierarchy = ltp.get_tc_by_nid(nid_hierarchy)
-            self.subfolders = [SubFolder(self.tc_hierarchy.RowIndex[RowIndex].nid, panutils.as_str(self.tc_hierarchy.getval(
+            self.subfolders = [SubFolder(self.tc_hierarchy.RowIndex[RowIndex].nid, panutils.as_str(self.tc_hierarchy.get_context_value(
                 RowIndex, PropIdEnum.PidTagDisplayName)), self.path) for RowIndex in range(len(self.tc_hierarchy.RowIndex))]
             self.tc_contents = None
             self.submessages = []
@@ -1457,25 +1463,25 @@ class Folder:
         except PANHuntException as e:
             logging.error(e)
 
-    def __get_submessages(self, ltp) -> list[SubMessage]:
+    def __get_submessages(self, ltp: LTP) -> list[SubMessage]:
         submessages: list[SubMessage] = []
         if self.tc_contents:
             for RowIndex in range(len(self.tc_contents.RowIndex)):
                 if RowIndex in list(self.tc_contents.RowIndex.keys()):
                     nid: NID = self.tc_contents.RowIndex[RowIndex].nid
-                    srn: Optional[str] = panutils.as_str(self.tc_contents.getval(
+                    srn: Optional[str] = panutils.as_str(self.tc_contents.get_context_value(
                         RowIndex, PropIdEnum.PidTagSentRepresentingNameW) or "default")
                     subject: Optional[str] = ltp.strip_SubjectPrefix(
-                        panutils.as_str(self.tc_contents.getval(RowIndex, PropIdEnum.PidTagSubjectW) or "default"))
+                        panutils.as_str(self.tc_contents.get_context_value(RowIndex, PropIdEnum.PidTagSubjectW) or "default"))
 
                     cst: Optional[dt.datetime] = None
-                    st = self.tc_contents.getval(
+                    st = self.tc_contents.get_context_value(
                         RowIndex, PropIdEnum.PidTagClientSubmitTime)
                     if st:
                         cst = panutils.as_datetime(st)
 
-                    sm = SubMessage(nid=nid, SentRepresentingName=srn,
-                                    Subject=subject, ClientSubmitTime=cst)
+                    sm = SubMessage(nid=nid, sent_representing_name=srn,
+                                    subject=subject, client_submit_time=cst)
                     submessages.append(sm)
         return submessages
 
@@ -1491,9 +1497,9 @@ class SubAttachment:
     AttachLongFilename: Optional[str]
     Filename: Optional[str]
 
-    def __init__(self, nid: NID, AttachmentSize: int, AttachFilename: Optional[str], AttachLongFilename: Optional[str]) -> None:
+    def __init__(self, nid: NID, attachment_size: int, attach_filename: Optional[str], attach_long_filename: Optional[str]) -> None:
 
-        self.nid, self.AttachmentSize, self.AttachFilename, self.AttachLongFilename = nid, AttachmentSize, AttachFilename, AttachLongFilename
+        self.nid, self.AttachmentSize, self.AttachFilename, self.AttachLongFilename = nid, attachment_size, attach_filename, attach_long_filename
         if self.AttachLongFilename:
             self.Filename = self.AttachLongFilename
         else:
@@ -1517,9 +1523,9 @@ class SubRecipient:
     DisplayType: Optional[int]
     EntryId: Optional['EntryID']
 
-    def __init__(self, RecipientType: int, DisplayName: str, ObjectType: Optional[int], AddressType: str, EmailAddress: str, DisplayType: Optional[int], EntryId: Optional['EntryID'] = None) -> None:
+    def __init__(self, recipient_type: int, display_name: str, object_type: Optional[int], address_type: str, email_address: str, display_type: Optional[int], entry_id: Optional['EntryID'] = None) -> None:
 
-        self.RecipientType, self.DisplayName, self.ObjectType, self.AddressType, self.EmailAddress, self.DisplayType, self.EntryId = RecipientType, DisplayName, ObjectType, AddressType, EmailAddress, DisplayType, EntryId
+        self.RecipientType, self.DisplayName, self.ObjectType, self.AddressType, self.EmailAddress, self.DisplayType, self.EntryId = recipient_type, display_name, object_type, address_type, email_address, display_type, entry_id
 
     def __repr__(self) -> str:
 
@@ -1584,73 +1590,83 @@ class Message:
             self.EntryId = 4 * b'\x00' + \
                 messaging.store_record_key + struct.pack('I', nid.nid)
 
-        self.MessageClass: str = panutils.as_str(self.pc.getval(
-            PropIdEnum.PidTagMessageClassW.value).value)
-        self.MessageFlags: int = panutils.as_int(self.pc.getval(
-            PropIdEnum.PidTagMessageFlags.value).value)
+        mc = self.pc.get_raw_data(
+            PropIdEnum.PidTagMessageClassW.value)
+        if mc:
+            self.MessageClass: str = panutils.as_str(mc.value)
+
+        mfs = self.pc.get_raw_data(
+            PropIdEnum.PidTagMessageFlags.value)
+        if mfs:
+            self.MessageFlags: int = panutils.as_int(mfs.value)
         self.HasAttachments: bool = (
             self.MessageFlags & Message.mfHasAttach == Message.mfHasAttach)
-        self.MessageSize: int = panutils.as_int(self.pc.getval(
-            PropIdEnum.PidTagMessageSize.value).value)
+
+        msz = self.pc.get_raw_data(
+            PropIdEnum.PidTagMessageSize.value)
+        if msz:
+            self.MessageSize: int = panutils.as_int(msz.value)
+
         self.Read = (self.MessageFlags & Message.mfRead == Message.mfRead)
 
         # If the message is a draft, then
         # values below are null
-        ms = self.pc.getval(
+        ms = self.pc.get_raw_data(
             PropIdEnum.PidTagMessageStatus.value)
         if ms:
             self.MessageStatus = panutils.as_int(
                 ms.value)
 
-        tmh = self.pc.getval(
+        tmh = self.pc.get_raw_data(
             PropIdEnum.PidTagTransportMessageHeaders.value)
         if tmh:
             self.TransportMessageHeaders = panutils.as_str(tmh.value)
 
-        mdt = self.pc.getval(
+        mdt = self.pc.get_raw_data(
             PropIdEnum.PidTagMessageDeliveryTime.value)
         if mdt:
             self.MessageDeliveryTime: dt.datetime = panutils.as_datetime(
                 mdt.value)
 
         # Body can be null in an email
-        b = self.pc.getval(PropIdEnum.PidTagBody.value)
+        b = self.pc.get_raw_data(PropIdEnum.PidTagBody.value)
         if b:
             self.Body = panutils.as_str(
                 b.value)
 
         # Optional property
-        s = self.pc.getval(PropIdEnum.PidTagSubjectW.value)
+        s = self.pc.get_raw_data(PropIdEnum.PidTagSubjectW.value)
         if s:
             self.Subject = ltp.strip_SubjectPrefix(
                 panutils.as_str(s.value))
 
-        # x = self.pc.getval(
+        # x = self.pc.get_raw_data(
         #     PropIdEnum.PidTagXOriginatingIP.value)
         # if x:
         #     self.XOriginatingIP = panutils.as_str(x.value)  # x-originating-ip
 
-        dto = self.pc.getval(PropIdEnum.PidTagDisplayToW.value)
+        dto = self.pc.get_raw_data(PropIdEnum.PidTagDisplayToW.value)
         if dto:
             self.DisplayTo = panutils.as_str(dto.value)
 
         # Null if imported
-        ssa = self.pc.getval(
+        ssa = self.pc.get_raw_data(
             PropIdEnum.PidTagSenderSmtpAddress.value)
         if ssa:
             self.SenderSmtpAddress = panutils.as_str(ssa.value)
 
         # Null if meeting invitation
-        srn = self.pc.getval(PropIdEnum.PidTagSentRepresentingNameW.value)
+        srn = self.pc.get_raw_data(
+            PropIdEnum.PidTagSentRepresentingNameW.value)
         if srn:
             self.SentRepresentingName = panutils.as_str(srn.value)
 
-        sn = self.pc.getval(
+        sn = self.pc.get_raw_data(
             PropIdEnum.PidTagSenderName.value)
         if sn:
             self.SenderName = panutils.as_str(sn.value)
 
-        cst = self.pc.getval(PropIdEnum.PidTagClientSubmitTime.value)
+        cst = self.pc.get_raw_data(PropIdEnum.PidTagClientSubmitTime.value)
         if cst:
             self.ClientSubmitTime = panutils.as_datetime(cst.value)
 
@@ -1672,31 +1688,31 @@ class Message:
         if self.tc_recipients:
             for i in range(len(self.tc_recipients.RowIndex)):
 
-                r_type: int = panutils.as_int(self.tc_recipients.getval(
+                r_type: int = panutils.as_int(self.tc_recipients.get_context_value(
                     i, PropIdEnum.PidTagRecipientType))
-                display_name: str = panutils.as_str(self.tc_recipients.getval(
+                display_name: str = panutils.as_str(self.tc_recipients.get_context_value(
                     i, PropIdEnum.PidTagDisplayName))
-                add_type: str = panutils.as_str(self.tc_recipients.getval(
+                add_type: str = panutils.as_str(self.tc_recipients.get_context_value(
                     i, PropIdEnum.PidTagAddressType))
-                email_address: str = panutils.as_str(self.tc_recipients.getval(
+                email_address: str = panutils.as_str(self.tc_recipients.get_context_value(
                     i, PropIdEnum.PidTagEmailAddress))
 
                 # Optional values
                 obj_type: Optional[int] = None
-                ot: _ValueType = self.tc_recipients.getval(
+                ot: _ValueType = self.tc_recipients.get_context_value(
                     i, PropIdEnum.PidTagObjectType)
                 if ot:
                     obj_type = panutils.as_int(ot)
 
                 entryId: Optional[EntryID] = None
-                eid: _ValueType = self.tc_recipients.getval(
+                eid: _ValueType = self.tc_recipients.get_context_value(
                     i, PropIdEnum.PidTagEntryID)
                 if eid:
                     value_bytes: bytes = panutils.as_binary(eid)
                     entryId = EntryID(value_bytes)
 
                 display_type: Optional[int] = None
-                dst: _ValueType = self.tc_recipients.getval(
+                dst: _ValueType = self.tc_recipients.get_context_value(
                     i, PropIdEnum.PidTagDisplayType)
                 if dst:
                     display_type = panutils.as_int(dst)
@@ -1711,18 +1727,18 @@ class Message:
         if self.tc_attachments:
             for i in range(len(self.tc_attachments.RowIndex)):
                 nid: NID = self.tc_attachments.RowIndex[i].nid
-                size: int = panutils.as_int(self.tc_attachments.getval(
+                size: int = panutils.as_int(self.tc_attachments.get_context_value(
                     i, PropIdEnum.PidTagAttachmentSize))
 
                 filename: Optional[str] = None
-                fn: _ValueType = self.tc_attachments.getval(
+                fn: _ValueType = self.tc_attachments.get_context_value(
                     i, PropIdEnum.PidTagAttachFilename)
 
                 if fn:
                     filename = panutils.as_str(fn)
 
                 long_filename: Optional[str] = None
-                lfn: _ValueType = self.tc_attachments.getval(
+                lfn: _ValueType = self.tc_attachments.get_context_value(
                     i, PropIdEnum.PidTagAttachLongFilename)
 
                 if lfn:
@@ -1772,16 +1788,28 @@ class Attachment:
         self.slentry = slentry
         self.pc = self.ltp.get_pc_by_slentry(slentry)
 
-        self.DisplayName = panutils.as_str(
-            self.pc.getval(PropIdEnum.PidTagDisplayName.value).value)
-        self.AttachMethod = panutils.as_int(
-            self.pc.getval(PropIdEnum.PidTagAttachMethod.value).value)
-        self.AttachmentSize = panutils.as_int(
-            self.pc.getval(PropIdEnum.PidTagAttachmentSize.value).value)
-        self.AttachFilename = panutils.as_str(self.pc.getval(
-            PropIdEnum.PidTagAttachFilename.value).value)  # 8.3 short name
-        self.AttachLongFilename = panutils.as_str(self.pc.getval(
-            PropIdEnum.PidTagAttachLongFilename.value).value)
+        dn = self.pc.get_raw_data(PropIdEnum.PidTagDisplayName.value)
+        if dn:
+            self.DisplayName = panutils.as_str(dn.value)
+
+        amt = self.pc.get_raw_data(PropIdEnum.PidTagAttachMethod.value)
+        if amt:
+            self.AttachMethod = panutils.as_int(amt.value)
+
+        asz = self.pc.get_raw_data(PropIdEnum.PidTagAttachmentSize.value)
+        if asz:
+            self.AttachmentSize = panutils.as_int(
+                asz.value)
+        afn = self.pc.get_raw_data(
+            PropIdEnum.PidTagAttachFilename.value)
+        if afn:
+            self.AttachFilename = panutils.as_str(afn.value)  # 8.3 short name
+
+        alfn = self.pc.get_raw_data(
+            PropIdEnum.PidTagAttachLongFilename.value)
+        if alfn:
+            self.AttachLongFilename = panutils.as_str(alfn.value)
+
         if self.AttachLongFilename:
             self.Filename = self.AttachLongFilename
         else:
@@ -1792,21 +1820,23 @@ class Attachment:
             self.Filename = '[NoFilename_Method%s]' % self.AttachMethod
 
         if self.AttachMethod == Message.afByValue:
-            self.BinaryData = panutils.as_binary(self.pc.getval(
-                PropIdEnum.PidTagAttachDataBinary.value).value)
+            atm = self.pc.get_raw_data(
+                PropIdEnum.PidTagAttachDataBinary.value)
+            if atm:
+                self.BinaryData = panutils.as_binary(atm.value)
         else:
-            ado = self.pc.getval(
+            ado = self.pc.get_raw_data(
                 PropIdEnum.PidTagAttachDataObject.value)
             if ado:
                 self.BinaryData = panutils.as_binary(ado.value)
-            # raise PSTException('Unsupported Attachment Method %s' % self.AttachMethod)
 
-        amt = self.pc.getval(PropIdEnum.PidTagAttachMimeTag.value)
+        amt = self.pc.get_raw_data(PropIdEnum.PidTagAttachMimeTag.value)
         if amt:
             self.AttachMimeTag = panutils.as_str(amt.value)
 
-        self.AttachExtension = panutils.as_str(
-            self.pc.getval(PropIdEnum.PidTagAttachExtension.value).value)
+        ae = self.pc.get_raw_data(PropIdEnum.PidTagAttachExtension.value)
+        if ae:
+            self.AttachExtension = panutils.as_str(ae.value)
 
     def get_all_properties(self) -> str:
 
@@ -1866,24 +1896,29 @@ class Messaging:
     def set_message_store(self) -> None:
 
         self.message_store = self.ltp.get_pc_by_nid(NID(NID.NID_MESSAGE_STORE))
-        self.store_record_key = panutils.as_binary(self.message_store.getval(
-            PropIdEnum.PidTagRecordKey.value).value)  # binary
 
+        srk = self.message_store.get_raw_data(
+            PropIdEnum.PidTagRecordKey.value)
+        if srk:
+            self.store_record_key = panutils.as_binary(srk.value)  # binary
+
+        self.PasswordCRC32Hash = None
         if PropIdEnum.PidTagPstPassword.value in self.message_store.properties.keys():
-            self.PasswordCRC32Hash = panutils.unpack_integer('I', struct.pack(
-                'i', panutils.as_int(self.message_store.getval(PropIdEnum.PidTagPstPassword.value).value)))
-        else:
-            self.PasswordCRC32Hash = None
+            passwd = self.message_store.get_raw_data(
+                PropIdEnum.PidTagPstPassword.value)
+            if passwd:
+                self.PasswordCRC32Hash = panutils.unpack_integer('I', struct.pack(
+                    'i', panutils.as_int(passwd.value)))
 
-        root_entryid_value = self.message_store.getval(
-            PropIdEnum.PidTagIpmSubTreeEntryId.value).value
-        if isinstance(root_entryid_value, EntryID):
-            self.root_entryid = root_entryid_value
+        riv = self.message_store.get_raw_data(
+            PropIdEnum.PidTagIpmSubTreeEntryId.value)
+        if riv and isinstance(riv.value, EntryID):
+            self.root_entryid = riv.value
 
-        deleted_items_entryid_value = self.message_store.getval(
-            PropIdEnum.PidTagIpmWastebasketEntryId.value).value
-        if isinstance(deleted_items_entryid_value, EntryID):
-            self.deleted_items_entryid = deleted_items_entryid_value
+        div = self.message_store.get_raw_data(
+            PropIdEnum.PidTagIpmWastebasketEntryId.value)
+        if div and isinstance(div.value, EntryID):
+            self.deleted_items_entryid = div.value
 
     def set_name_to_id_map(self) -> None:
 
@@ -1891,15 +1926,29 @@ class Messaging:
         self.pc_name_to_id_map: PC = self.ltp.get_pc_by_nid(
             NID(NID.NID_NAME_TO_ID_MAP))
 
-        nameid_entrystream: bytes = panutils.as_binary(self.pc_name_to_id_map.getval(
-            PropIdEnum.PidTagNameidStreamEntry.value).value)
+        nameid_entrystream: Optional[bytes] = None
+        nameid_entry_obj = self.pc_name_to_id_map.get_raw_data(
+            PropIdEnum.PidTagNameidStreamEntry.value)
+        if nameid_entry_obj:
+            nameid_entrystream = panutils.as_binary(nameid_entry_obj.value)
+
         if nameid_entrystream:
             self.nameid_entries = [NAMEID(nameid_entrystream[i * 8:(i + 1) * 8])
                                    for i in range(len(nameid_entrystream) // 8)]
-            nameid_stringstream: bytes = panutils.as_binary(self.pc_name_to_id_map.getval(
-                PropIdEnum.PidTagNameidStreamString.value).value)
-            nameid_guidstream: bytes = panutils.as_binary(self.pc_name_to_id_map.getval(
-                PropIdEnum.PidTagNameidStreamGuid.value).value)
+
+            nameid_stringstream: Optional[bytes] = None
+            nameid_string_obj = self.pc_name_to_id_map.get_raw_data(
+                PropIdEnum.PidTagNameidStreamString.value)
+            if nameid_string_obj:
+                nameid_stringstream = panutils.as_binary(
+                    nameid_string_obj.value)
+
+            nameid_guidstream: Optional[bytes] = None
+            nameid_guid_obj = self.pc_name_to_id_map.get_raw_data(
+                PropIdEnum.PidTagNameidStreamGuid.value)
+            if nameid_guid_obj:
+                nameid_guidstream = panutils.as_binary(
+                    nameid_guid_obj.value)
             if nameid_stringstream and nameid_guidstream:
 
                 for nameid in self.nameid_entries:
@@ -1921,9 +1970,9 @@ class Messaging:
                         nameid.guid = nameid_guidstream[16 *
                                                         (nameid.wGuid - 3):16 * (nameid.wGuid - 2)]
 
-    def get_folder(self, entryid: EntryID, parent_path: str = '') -> Folder:
+    def get_folder(self, entry_id: EntryID, parent_path: str = '') -> Folder:
 
-        return Folder(entryid.nid, self.ltp, parent_path, self)
+        return Folder(entry_id.nid, self.ltp, parent_path, self)
 
     def get_named_properties(self) -> str:
 
@@ -2501,17 +2550,22 @@ class PST:
 
     def get_pst_status(self) -> str:
 
+        display_name: str = ""
+        dn = self.messaging.message_store.get_raw_data(
+            PropIdEnum.PidTagDisplayName.value)
+        if dn:
+            display_name = panutils.as_str(dn.value)
         status: str = 'Valid PST: %s, Unicode: %s, CryptMethod: %s, Name: %s, Password: %s' % (
-            self.header.validPST, self.header.is_unicode, self.header.bCryptMethod, panutils.as_str(self.messaging.message_store.getval(PropIdEnum.PidTagDisplayName.value).value), self.messaging.PasswordCRC32Hash)
+            self.header.validPST, self.header.is_unicode, self.header.bCryptMethod, display_name, self.messaging.PasswordCRC32Hash)
         return status
 
     @staticmethod
-    def bruteforce(charset, maxlength: int) -> Generator[str, None, None]:
+    def bruteforce(charset:str, maxlength: int) -> Generator[str, None, None]:
 
         return (''.join(candidate) for candidate in itertools.chain.from_iterable(itertools.product(charset, repeat=i) for i in range(1, maxlength + 1)))
 
     @staticmethod
-    def crack_password(crc, dictionary_file: str = '') -> str:
+    def crack_password(crc: int, dictionary_file: str = '') -> str:
         """either does a dictionary attack against the PST password CRC hash, or does a brute force of up to 4 chars"""
 
         if dictionary_file:

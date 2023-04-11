@@ -14,7 +14,9 @@ class PAN:
         self.path, self.sub_path, self.brand, self.pan = path, sub_path, brand, pan
 
     def get_masked_pan(self) -> str:
-        pan_out: str = re.sub(r'\d', '*', self.pan[:-4]) + self.pan[-4:]
+        """The first six and last four digits are the maximum number of digits that may be displayed"""
+        pan_out: str = self.pan[0:6] + \
+            re.sub(r'\d', '*', self.pan[6:-4]) + self.pan[-4:]
         return f'{self.sub_path} {self.brand}:{pan_out}'
 
     @staticmethod
