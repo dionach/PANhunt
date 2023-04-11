@@ -9,7 +9,6 @@ from typing import Generator, Optional
 import msmsg
 import panutils
 import pst
-from exceptions import PANHuntException
 from PAN import PAN
 from patterns import CardPatternSingleton
 
@@ -50,24 +49,22 @@ class PANFile:
             self.accessed = self.dtm_from_ts(stat.st_atime)
             self.modified = self.dtm_from_ts(stat.st_mtime)
             self.created = self.dtm_from_ts(stat.st_ctime)
-        except WindowsError:
+        except WindowsError as ex:
             self.size = -1
-            self.set_error(str(sys.exc_info()[1]))
+            self.set_error(str(ex))
 
     def dtm_from_ts(self, ts: float) -> datetime:
 
         try:
             return datetime.fromtimestamp(ts)
-        except ValueError as ve:
+        except ValueError as ex:
             if ts == -753549904:
                 # Mac OSX "while copying" thing
                 return datetime(1946, 2, 14, 8, 34, 56)
             else:
-                # raise Exception() from ve
-                self.set_error(str(sys.exc_info()[1]))
-                return None
+                self.set_error(str(ex))
+                return datetime(1970, 1, 1)
 
-    # TODO: Use a general error logging and display mechanism
     def set_error(self, error_msg: str) -> None:
         if self.errors is None:
             self.errors = [error_msg]
@@ -89,20 +86,20 @@ class PANFile:
                         search_extensions=search_extensions)
                 else:
                     self.set_error('Invalid ZIP file')
-            except IOError:
-                self.set_error(str(sys.exc_info()[1]))
-            except Exception:
-                self.set_error(str(sys.exc_info()[1]))
+            except IOError as ex:
+                self.set_error(str(ex))
+            except Exception as ex:
+                self.set_error(str(ex))
 
         elif self.filetype == 'TEXT':
             try:
                 with open(self.path, 'r', encoding='utf-8', errors='backslashreplace') as f:
                     file_text: str = f.read()
                     self.check_text_regexs(file_text, '', excluded_pans_list)
-            except IOError:
-                self.set_error(str(sys.exc_info()[1]))
-            except Exception:
-                self.set_error(str(sys.exc_info()[1]))
+            except IOError as ex:
+                self.set_error(str(ex))
+            except Exception as ex:
+                self.set_error(str(ex))
 
         elif self.filetype == 'SPECIAL':
             if panutils.get_ext(self.path) == '.msg':
@@ -115,10 +112,10 @@ class PANFile:
                                               search_extensions=search_extensions)
                     else:
                         self.set_error('Invalid MSG file')
-                except IOError:
-                    self.set_error(str(sys.exc_info()[1]))
-                except Exception:
-                    self.set_error(str(sys.exc_info()[1]))
+                except IOError as ex:
+                    self.set_error(str(ex))
+                except Exception as ex:
+                    self.set_error(str(ex))
 
         if len(self.matches) > 0:
             logging.info(
@@ -175,10 +172,10 @@ class PANFile:
 
             pst_file.close()
 
-        except IOError:
-            self.set_error(str(sys.exc_info()[1]))
-        except pst.PANHuntException:
-            self.set_error(str(sys.exc_info()[1]))
+        except IOError as ex:
+            self.set_error(str(ex))
+        except pst.PANHuntException as ex:
+            self.set_error(str(ex))
 
     def check_attachment_regexs(self, attachment: pst.Attachment | msmsg.Attachment, sub_path: str, excluded_pans_list: list[str], search_extensions: dict[str, list[str]]) -> None:
         """for PST and MSG attachments, check attachment for valid extension and then regexs"""
@@ -202,8 +199,8 @@ class PANFile:
                                           excluded_pans_list=excluded_pans_list,
                                           search_extensions=search_extensions)
                     memory_zip.close()
-                except RuntimeError:  # RuntimeError: # e.g. zip needs password
-                    self.set_error(str(sys.exc_info()[1]))
+                except RuntimeError as ex:  # RuntimeError: # e.g. zip needs password
+                    self.set_error(str(ex))
 
     def check_msg_regexs(self, msg: msmsg.MSMSG, sub_path: str, excluded_pans_list: list[str], search_extensions: dict[str, list[str]]) -> None:
 
@@ -236,8 +233,8 @@ class PANFile:
                                                 sub_path, panutils.decode_zip_filename(file_in_zip)),
                                               excluded_pans_list=excluded_pans_list,
                                               search_extensions=search_extensions)
-                except RuntimeError:  # RuntimeError: # e.g. zip needs password
-                    self.set_error(str(sys.exc_info()[1]))
+                except RuntimeError as ex:  # RuntimeError: # e.g. zip needs password
+                    self.set_error(str(ex))
             # normal doc
             elif panutils.get_ext(file_in_zip) in search_extensions['TEXT']:
                 try:
@@ -247,8 +244,8 @@ class PANFile:
                                            sub_path=os.path.join(
                                                sub_path, panutils.decode_zip_filename(file_in_zip)),
                                            excluded_pans_list=excluded_pans_list)
-                except RuntimeError:  # RuntimeError: # e.g. zip needs password
-                    self.set_error(str(sys.exc_info()[1]))
+                except RuntimeError as ex:  # RuntimeError: # e.g. zip needs password
+                    self.set_error(str(ex))
             else:  # SPECIAL
                 try:
                     if panutils.get_ext(file_in_zip) == '.msg':
@@ -263,5 +260,5 @@ class PANFile:
                                                   excluded_pans_list=excluded_pans_list,
                                                   search_extensions=search_extensions)
                         memory_msg.close()
-                except RuntimeError:  # RuntimeError
-                    self.set_error(str(sys.exc_info()[1]))
+                except RuntimeError as ex:  # RuntimeError
+                    self.set_error(str(ex))
