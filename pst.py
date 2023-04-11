@@ -879,7 +879,16 @@ class PType:
         if self.ptype == PTypeEnum.PtypInteger64:
             return panutils.unpack_integer('q', value_bytes)
         if self.ptype == PTypeEnum.PtypString:
-            return value_bytes.decode('utf-16-le')  # unicode
+            # Preventing the error:
+            # UnicodeDecodeError: 'utf16' codec can't decode bytes in position 0 - 1:
+            # illegal UTF - 16 surrogate
+            try:
+                return value_bytes.decode('utf-16-le')  # unicode
+            except UnicodeDecodeError:
+                PANHuntException(
+                    'String property not correctly utf-16-le encoded, ignoring errors')
+                # unicode
+                return value_bytes.decode('utf-16-le', errors='ignore')
         if self.ptype == PTypeEnum.PtypString8:
             return value_bytes
         if self.ptype == PTypeEnum.PtypTime:

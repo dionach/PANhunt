@@ -350,12 +350,12 @@ def main() -> None:
     other_extensions_string = str(args.other_files)
     mask_pans: bool = not args.unmask
     excluded_pans_string = str(args.exclude_pan)
-    json_path = str(args.json_path)
-    config_file = str(args.config)
+    json_path: Optional[str] = args.json_path
+    config_file: Optional[str] = args.config
 
     # The singleton is initiated at the first call with the hardcoded default values.
     # If exists, read the config file
-    if config_file != 'None':
+    if config_file:
         PANHuntConfigSingleton.instance().from_file(
             config_file=config_file)
 

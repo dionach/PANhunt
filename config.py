@@ -12,8 +12,8 @@ class PANHuntConfigSingleton:
     excluded_directories: list[str] = ['C:\\Windows',
                                        'C:\\Program Files', 'C:\\Program Files(x86)']
     search_extensions: dict[str, list[str]] = {
-        'TEXT': ['.doc', '.xls', '.xml', '.txt', '.csv', '.log'],
-        'ZIP': ['.docx', '.xlsx', '.zip'],
+        'TEXT': ['.doc', '.xls', '.ppt', '.xml', '.txt', '.csv', '.log', '.rtf', '.tmp', '.bak', '.rtf', '.csv', '.htm,' '.html', '.js', '.css', '.md', '.json'],
+        'ZIP': ['.docx', '.xlsx', '.pptx', '.zip'],
         'SPECIAL': ['.msg'],
         'MAIL': ['.pst'],
         'OTHER': ['.ost', '.accdb', '.mdb']

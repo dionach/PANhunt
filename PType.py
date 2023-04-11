@@ -42,7 +42,16 @@ class PType:
         if self.ptype == PTypeEnum.PtypInteger64:
             return panutils.unpack_integer('q', value_bytes)
         if self.ptype == PTypeEnum.PtypString:
-            return value_bytes.decode('utf-16-le')  # unicode
+            # Preventing the error:
+            # UnicodeDecodeError: 'utf16' codec can't decode bytes in position 0 - 1:
+            # illegal UTF - 16 surrogate
+            try:
+                return value_bytes.decode('utf-16-le')  # unicode
+            except UnicodeDecodeError:
+                PANHuntException(
+                    'String property not correctly utf-16-le encoded, ignoring errors')
+                # unicode
+                return value_bytes.decode('utf-16-le', errors='ignore')
         if self.ptype == PTypeEnum.PtypString8:
             if value_bytes[-1:] == b'\x00':
                 return value_bytes[:-1]
@@ -120,11 +129,8 @@ class PType:
     def get_multi_value_offsets(self, value_bytes: bytes) -> tuple[int, list[int]]:
 
         ulCount: int = panutils.unpack_integer('I', value_bytes[:4])
-        if ulCount == 1:
-            # not documented, but seems as if a single length multi only has a 4 byte ULONG with the offset. Boo!
-            rgulDataOffsets: list[int] = [8]
-        else:
-            rgulDataOffsets = [panutils.unpack_integer(
-                'Q', value_bytes[4 + i * 8:4 + (i + 1) * 8]) for i in range(ulCount)]
+        rgulDataOffsets: list[int] = [panutils.unpack_integer(
+            'I', value_bytes[(i + 1) * 4:(i + 2) * 4]) for i in range(ulCount)]
+
         rgulDataOffsets.append(len(value_bytes))
         return ulCount, rgulDataOffsets
