@@ -9,7 +9,6 @@ from typing import Generator, Optional
 import msmsg
 import panutils
 import pst
-from exceptions import PANHuntException
 from PAN import PAN
 from patterns import CardPatternSingleton
 
@@ -65,7 +64,7 @@ class PANFile:
             else:
                 # raise Exception() from ve
                 self.set_error(str(sys.exc_info()[1]))
-                return None
+                return datetime(1970, 1, 1)
 
     # TODO: Use a general error logging and display mechanism
     def set_error(self, error_msg: str) -> None:
