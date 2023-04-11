@@ -70,7 +70,8 @@ class PANHuntConfigSingleton:
         if excluded_pans_string and len(excluded_pans_string) > 0:
             self.excluded_pans = excluded_pans_string.split(',')
         if json_path:
-            self.json_path = f'{json_path}_{time.strftime("%Y-%m-%d-%H%M%S")}'
+            self.json_path = json_path.replace(
+                '.json', f'_{time.strftime("%Y-%m-%d-%H%M%S")}.json')
 
     @staticmethod
     def from_args(search_dir: Optional[str] = None,
@@ -185,4 +186,5 @@ class PANHuntConfigSingleton:
             conf.excluded_pans = excluded_pans_string.split(',')
 
         if json_path:
-            conf.json_path = f'{json_path}_{time.strftime("%Y-%m-%d-%H%M%S")}'
+            conf.json_path = json_path.replace(
+                '.json', f'_{time.strftime("%Y-%m-%d-%H%M%S")}.json')
