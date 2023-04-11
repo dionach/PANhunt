@@ -10,6 +10,7 @@
 
 
 import argparse
+import datetime
 import hashlib
 import json
 import logging
@@ -44,8 +45,13 @@ app_version = '1.3'
 class Hunter:
 
     pbar: MainProgressbar
+    start: datetime.datetime
+    end: datetime.datetime
 
     def hunt_pans(self) -> tuple[int, int, list[PANFile]]:
+
+        # Start timer
+        self.start = datetime.datetime.now()
 
         # find all files to check
         all_files: list[PANFile] = self.__find_all_files_in_search_directory()
@@ -60,6 +66,9 @@ class Hunter:
         total_files_searched: int = total_docs + total_psts
         pans_found: int = doc_pans_found + pst_pans_found
 
+        # Finish timer
+        self.end = datetime.datetime.now()
+
         return total_files_searched, pans_found, all_files
 
     def output_report(self, all_files: list[PANFile], total_files_searched: int, pans_found: int) -> None:
@@ -71,6 +80,7 @@ class Hunter:
             PANHuntConfigSingleton.instance().search_dir, ','.join(PANHuntConfigSingleton.instance().excluded_directories))
         pan_report += 'Command: %s\n' % (' '.join(sys.argv))
         pan_report += 'Uname: %s\n' % (' | '.join(platform.uname()))
+        pan_report += f'Elapsed time: {self.end - self.start}\n'
         pan_report += 'Searched %s files. Found %s possible PANs.\n%s\n\n' % (
             total_files_searched, pans_found, '=' * 100)
 
@@ -113,6 +123,7 @@ class Hunter:
         report['excluded'] = ','.join(
             PANHuntConfigSingleton.instance().excluded_directories)
         report['command'] = ' '.join(sys.argv)
+        report['elapsed'] = str(self.end - self.start)
         report['total_files'] = total_files_searched
         report['pans_found'] = pans_found
         report['pans_found_results'] = []
@@ -326,7 +337,6 @@ def main() -> None:
         '-C', dest='config', help='configuration file to use')
     arg_parser.add_argument(
         '-X', dest='exclude_pan', help='PAN to exclude from search')
-
     arg_parser.add_argument(
         '-j', dest='json_path', help='Create JSON formatted report')
 
