@@ -814,7 +814,7 @@ class PCBTHData:
         self.wPropType = wPropType
         self.dwValueHnid: bytes = dwValueHnid
 
-        ptype: PType = hn.ltp.ptypes[PTypeEnum(self.wPropType)]
+        ptype: PstPTypeWrapper = hn.ltp.ptypes[PTypeEnum(self.wPropType)]
 
         if not ptype.is_variable and not ptype.is_multi:
             if ptype.byte_count <= 4:
@@ -842,7 +842,7 @@ class PCBTHData:
         return '%s (%s) = %s' % (hex(self.wPropId), hex(self.wPropType), repr(self.value))
 
 
-class PType:
+class PstPTypeWrapper:
 
     ptype: PTypeEnum
     byte_count: int
@@ -856,8 +856,8 @@ class PType:
     def value(self, value_bytes: bytes) -> _ValueType:
         """value_bytes is normally a string of bytes, but if multi and variable, bytes is a list of bytes"""
 
-        ulCount: int
-        rgulDataOffsets: list[int]
+        ul_count: int
+        rgul_data_offsets: list[int]
         data_list: list[bytes]
 
         if self.ptype == PTypeEnum.PtypInteger16:
@@ -919,19 +919,20 @@ class PType:
         if self.ptype == PTypeEnum.PtypMultipleInteger64:
             self.unpack_list_int(value_bytes=value_bytes, bit_size=64)
         if self.ptype == PTypeEnum.PtypMultipleString:
-            ulCount, rgulDataOffsets = self.get_multi_value_offsets(
+            ul_count, rgul_data_offsets = self.get_multi_value_offsets(
                 value_bytes)
             s: list[str] = []
-            for i in range(ulCount):
-                s.append(value_bytes[rgulDataOffsets[i]:rgulDataOffsets[i + 1]].decode('utf-16-le'))
+            for i in range(ul_count):
+                s.append(
+                    value_bytes[rgul_data_offsets[i]:rgul_data_offsets[i + 1]].decode('utf-16-le'))
             return s
         if self.ptype == PTypeEnum.PtypMultipleString8:
-            ulCount, rgulDataOffsets = self.get_multi_value_offsets(
+            ul_count, rgul_data_offsets = self.get_multi_value_offsets(
                 value_bytes)
             data_list = []
-            for i in range(ulCount):
+            for i in range(ul_count):
                 data_list.append(
-                    value_bytes[rgulDataOffsets[i]:rgulDataOffsets[i + 1]])
+                    value_bytes[rgul_data_offsets[i]:rgul_data_offsets[i + 1]])
             return data_list
         if self.ptype == PTypeEnum.PtypMultipleTime:
             count = len(value_bytes) // 8
@@ -940,12 +941,12 @@ class PType:
             count = len(value_bytes) // 16
             return [value_bytes[i * 16:(i + 1) * 16] for i in range(count)]
         if self.ptype == PTypeEnum.PtypMultipleBinary:
-            ulCount, rgulDataOffsets = self.get_multi_value_offsets(
+            ul_count, rgul_data_offsets = self.get_multi_value_offsets(
                 value_bytes)
             data_list = []
-            for i in range(ulCount):
+            for i in range(ul_count):
                 data_list.append(
-                    value_bytes[rgulDataOffsets[i]:rgulDataOffsets[i + 1]])
+                    value_bytes[rgul_data_offsets[i]:rgul_data_offsets[i + 1]])
             return data_list
         if self.ptype == PTypeEnum.PtypUnspecified:
             return value_bytes
@@ -981,12 +982,12 @@ class PType:
 
     def get_multi_value_offsets(self, value_bytes: bytes) -> tuple[int, list[int]]:
 
-        ulCount: int = panutils.unpack_integer('I', value_bytes[:4])
-        rgulDataOffsets: list[int] = [panutils.unpack_integer(
-            'I', value_bytes[(i + 1) * 4:(i + 2) * 4]) for i in range(ulCount)]
+        ul_count: int = panutils.unpack_integer('I', value_bytes[:4])
+        rgul_data_offsets: list[int] = [panutils.unpack_integer(
+            'I', value_bytes[(i + 1) * 4:(i + 2) * 4]) for i in range(ul_count)]
 
-        rgulDataOffsets.append(len(value_bytes))
-        return ulCount, rgulDataOffsets
+        rgul_data_offsets.append(len(value_bytes))
+        return ul_count, rgul_data_offsets
 
 
 class PC:  # Property Context
@@ -1189,7 +1190,8 @@ class TC:  # Table Context
         if data_bytes is None:
             return None
 
-        ptype: PType = self.hn.ltp.ptypes[PTypeEnum(tcoldesc.wPropType)]
+        ptype: PstPTypeWrapper = self.hn.ltp.ptypes[PTypeEnum(
+            tcoldesc.wPropType)]
         hid: HID
 
         if not ptype.is_variable and not ptype.is_multi:
@@ -1218,13 +1220,13 @@ class TC:  # Table Context
 
         return self.RowIndex[RowIndex].dwRowID
 
-    def get_context_value(self, RowIndex: int, wPropId: PropIdEnum) -> _ValueType:
+    def get_context_value(self, row_index: int, prop_id: PropIdEnum) -> _ValueType:
 
-        dwRowID: int = self.get_row_ID(RowIndex)
-        rowvals: dict[int,
-                      _ValueType] = self.RowMatrix[dwRowID]
-        if wPropId.value in rowvals.keys():
-            return rowvals[wPropId.value]
+        row_id: int = self.get_row_ID(row_index)
+        row_values: dict[int,
+                         _ValueType] = self.RowMatrix[row_id]
+        if prop_id.value in row_values.keys():
+            return row_values[prop_id.value]
         return None
 
     def __repr__(self) -> str:
@@ -1244,39 +1246,40 @@ class LTP:
 
         self.nbd: NBD = nbd
 
-        self.ptypes: dict[PTypeEnum, PType] = {
-            PTypeEnum.PtypInteger16: PType(PTypeEnum.PtypInteger16, 2, False, False),
-            PTypeEnum.PtypInteger32: PType(PTypeEnum.PtypInteger32, 4, False, False),
-            PTypeEnum.PtypFloating32: PType(PTypeEnum.PtypFloating32, 4, False, False),
-            PTypeEnum.PtypFloating64: PType(PTypeEnum.PtypFloating64, 8, False, False),
-            PTypeEnum.PtypCurrency: PType(PTypeEnum.PtypCurrency, 8, False, False),
-            PTypeEnum.PtypFloatingTime: PType(PTypeEnum.PtypFloatingTime, 8, False, False),
-            PTypeEnum.PtypErrorCode: PType(PTypeEnum.PtypErrorCode, 4, False, False),
-            PTypeEnum.PtypBoolean: PType(PTypeEnum.PtypBoolean, 1, False, False),
-            PTypeEnum.PtypInteger64: PType(PTypeEnum.PtypInteger64, 8, False, False),
-            PTypeEnum.PtypString: PType(PTypeEnum.PtypString, 0, True, False),
-            PTypeEnum.PtypString8: PType(PTypeEnum.PtypString8, 0, True, False),
-            PTypeEnum.PtypTime: PType(PTypeEnum.PtypTime, 8, False, False),
-            PTypeEnum.PtypGuid: PType(PTypeEnum.PtypGuid, 16, False, False),
-            PTypeEnum.PtypServerId: PType(PTypeEnum.PtypServerId, 2, False, True),
-            PTypeEnum.PtypRestriction: PType(PTypeEnum.PtypRestriction, 0, True, False),
-            PTypeEnum.PtypRuleAction: PType(PTypeEnum.PtypRuleAction, 2, False, True),
-            PTypeEnum.PtypBinary: PType(PTypeEnum.PtypBinary, 2, False, True),
-            PTypeEnum.PtypMultipleInteger16: PType(PTypeEnum.PtypMultipleInteger16, 2, False, True),
-            PTypeEnum.PtypMultipleInteger32: PType(PTypeEnum.PtypMultipleInteger32, 2, False, True),
-            PTypeEnum.PtypMultipleFloating32: PType(PTypeEnum.PtypMultipleFloating32, 2, False, True),
-            PTypeEnum.PtypMultipleFloating64: PType(PTypeEnum.PtypMultipleFloating64, 2, False, True),
-            PTypeEnum.PtypMultipleCurrency: PType(PTypeEnum.PtypMultipleCurrency, 2, False, True),
-            PTypeEnum.PtypMultipleFloatingTime: PType(PTypeEnum.PtypMultipleFloatingTime, 2, False, True),
-            PTypeEnum.PtypMultipleInteger64: PType(PTypeEnum.PtypMultipleInteger64, 2, False, True),
-            PTypeEnum.PtypMultipleString: PType(PTypeEnum.PtypMultipleString, 2, True, True),
-            PTypeEnum.PtypMultipleString8: PType(PTypeEnum.PtypMultipleString8, 2, True, True),
-            PTypeEnum.PtypMultipleTime: PType(PTypeEnum.PtypMultipleTime, 2, False, True),
-            PTypeEnum.PtypMultipleGuid: PType(PTypeEnum.PtypMultipleGuid, 2, False, True),
-            PTypeEnum.PtypMultipleBinary: PType(PTypeEnum.PtypMultipleBinary, 2, False, True),
-            PTypeEnum.PtypUnspecified: PType(PTypeEnum.PtypUnspecified, 0, False, False),
-            PTypeEnum.PtypNull: PType(PTypeEnum.PtypNull, 0, False, False),
-            PTypeEnum.PtypObject: PType(PTypeEnum.PtypObject, 4, False, True)
+        self.ptypes: dict[PTypeEnum, PstPTypeWrapper] = {
+            PTypeEnum.PtypInteger16: PstPTypeWrapper(PTypeEnum.PtypInteger16, 2, False, False),
+            PTypeEnum.PtypInteger32: PstPTypeWrapper(PTypeEnum.PtypInteger32, 4, False, False),
+            PTypeEnum.PtypFloating32: PstPTypeWrapper(PTypeEnum.PtypFloating32, 4, False, False),
+            PTypeEnum.PtypFloating64: PstPTypeWrapper(PTypeEnum.PtypFloating64, 8, False, False),
+            PTypeEnum.PtypCurrency: PstPTypeWrapper(PTypeEnum.PtypCurrency, 8, False, False),
+            PTypeEnum.PtypFloatingTime: PstPTypeWrapper(PTypeEnum.PtypFloatingTime, 8, False, False),
+            PTypeEnum.PtypErrorCode: PstPTypeWrapper(PTypeEnum.PtypErrorCode, 4, False, False),
+            PTypeEnum.PtypBoolean: PstPTypeWrapper(PTypeEnum.PtypBoolean, 1, False, False),
+            PTypeEnum.PtypInteger64: PstPTypeWrapper(PTypeEnum.PtypInteger64, 8, False, False),
+            PTypeEnum.PtypString: PstPTypeWrapper(PTypeEnum.PtypString, 0, True, False),
+            PTypeEnum.PtypString8: PstPTypeWrapper(PTypeEnum.PtypString8, 0, True, False),
+            PTypeEnum.PtypTime: PstPTypeWrapper(PTypeEnum.PtypTime, 8, False, False),
+            PTypeEnum.PtypGuid: PstPTypeWrapper(PTypeEnum.PtypGuid, 16, False, False),
+            PTypeEnum.PtypServerId: PstPTypeWrapper(PTypeEnum.PtypServerId, 2, False, True),
+            PTypeEnum.PtypRestriction: PstPTypeWrapper(PTypeEnum.PtypRestriction, 0, True, False),
+            PTypeEnum.PtypRuleAction: PstPTypeWrapper(PTypeEnum.PtypRuleAction, 2, False, True),
+            PTypeEnum.PtypBinary: PstPTypeWrapper(PTypeEnum.PtypBinary, 2, False, True),
+            PTypeEnum.PtypMultipleInteger16: PstPTypeWrapper(PTypeEnum.PtypMultipleInteger16, 2, False, True),
+            PTypeEnum.PtypMultipleInteger32: PstPTypeWrapper(PTypeEnum.PtypMultipleInteger32, 2, False, True),
+            PTypeEnum.PtypMultipleFloating32: PstPTypeWrapper(PTypeEnum.PtypMultipleFloating32, 2, False, True),
+            PTypeEnum.PtypMultipleFloating64: PstPTypeWrapper(PTypeEnum.PtypMultipleFloating64, 2, False, True),
+            PTypeEnum.PtypMultipleCurrency: PstPTypeWrapper(PTypeEnum.PtypMultipleCurrency, 2, False, True),
+            PTypeEnum.PtypMultipleFloatingTime: PstPTypeWrapper(PTypeEnum.PtypMultipleFloatingTime, 2, False, True),
+            PTypeEnum.PtypMultipleInteger64: PstPTypeWrapper(PTypeEnum.PtypMultipleInteger64, 2, False, True),
+            PTypeEnum.PtypMultipleString: PstPTypeWrapper(PTypeEnum.PtypMultipleString, 2, True, True),
+            PTypeEnum.PtypMultipleString8: PstPTypeWrapper(PTypeEnum.PtypMultipleString8, 2, True, True),
+            PTypeEnum.PtypMultipleTime: PstPTypeWrapper(PTypeEnum.PtypMultipleTime, 2, False, True),
+            PTypeEnum.PtypMultipleGuid: PstPTypeWrapper(PTypeEnum.PtypMultipleGuid, 2, False, True),
+            PTypeEnum.PtypMultipleBinary: PstPTypeWrapper(PTypeEnum.PtypMultipleBinary, 2, False, True),
+            PTypeEnum.PtypUnspecified: PstPTypeWrapper(PTypeEnum.PtypUnspecified, 0, False, False),
+            PTypeEnum.PtypNull: PstPTypeWrapper(PTypeEnum.PtypNull, 0, False, False),
+            PTypeEnum.PtypObject: PstPTypeWrapper(
+                PTypeEnum.PtypObject, 4, False, True)
         }
 
     def get_pc_by_nid(self, nid: NID) -> PC:
@@ -1376,12 +1379,12 @@ class SubMessage:
     Subject: Optional[str]
     ClientSubmitTime: Optional[dt.datetime]
 
-    def __init__(self, nid: NID, SentRepresentingName: Optional[str], Subject: Optional[str], ClientSubmitTime: Optional[dt.datetime]) -> None:
+    def __init__(self, nid: NID, sent_representing_name: Optional[str], subject: Optional[str], client_submit_time: Optional[dt.datetime]) -> None:
 
         self.nid = nid
-        self.SentRepresentingName = SentRepresentingName
-        self.Subject = Subject
-        self.ClientSubmitTime = ClientSubmitTime
+        self.SentRepresentingName = sent_representing_name
+        self.Subject = subject
+        self.ClientSubmitTime = client_submit_time
 
     def __repr__(self) -> str:
 
@@ -1460,7 +1463,7 @@ class Folder:
         except PANHuntException as e:
             logging.error(e)
 
-    def __get_submessages(self, ltp) -> list[SubMessage]:
+    def __get_submessages(self, ltp: LTP) -> list[SubMessage]:
         submessages: list[SubMessage] = []
         if self.tc_contents:
             for RowIndex in range(len(self.tc_contents.RowIndex)):
@@ -1477,8 +1480,8 @@ class Folder:
                     if st:
                         cst = panutils.as_datetime(st)
 
-                    sm = SubMessage(nid=nid, SentRepresentingName=srn,
-                                    Subject=subject, ClientSubmitTime=cst)
+                    sm = SubMessage(nid=nid, sent_representing_name=srn,
+                                    subject=subject, client_submit_time=cst)
                     submessages.append(sm)
         return submessages
 
@@ -1494,9 +1497,9 @@ class SubAttachment:
     AttachLongFilename: Optional[str]
     Filename: Optional[str]
 
-    def __init__(self, nid: NID, AttachmentSize: int, AttachFilename: Optional[str], AttachLongFilename: Optional[str]) -> None:
+    def __init__(self, nid: NID, attachment_size: int, attach_filename: Optional[str], attach_long_filename: Optional[str]) -> None:
 
-        self.nid, self.AttachmentSize, self.AttachFilename, self.AttachLongFilename = nid, AttachmentSize, AttachFilename, AttachLongFilename
+        self.nid, self.AttachmentSize, self.AttachFilename, self.AttachLongFilename = nid, attachment_size, attach_filename, attach_long_filename
         if self.AttachLongFilename:
             self.Filename = self.AttachLongFilename
         else:
@@ -1520,9 +1523,9 @@ class SubRecipient:
     DisplayType: Optional[int]
     EntryId: Optional['EntryID']
 
-    def __init__(self, RecipientType: int, DisplayName: str, ObjectType: Optional[int], AddressType: str, EmailAddress: str, DisplayType: Optional[int], EntryId: Optional['EntryID'] = None) -> None:
+    def __init__(self, recipient_type: int, display_name: str, object_type: Optional[int], address_type: str, email_address: str, display_type: Optional[int], entry_id: Optional['EntryID'] = None) -> None:
 
-        self.RecipientType, self.DisplayName, self.ObjectType, self.AddressType, self.EmailAddress, self.DisplayType, self.EntryId = RecipientType, DisplayName, ObjectType, AddressType, EmailAddress, DisplayType, EntryId
+        self.RecipientType, self.DisplayName, self.ObjectType, self.AddressType, self.EmailAddress, self.DisplayType, self.EntryId = recipient_type, display_name, object_type, address_type, email_address, display_type, entry_id
 
     def __repr__(self) -> str:
 
@@ -1967,9 +1970,9 @@ class Messaging:
                         nameid.guid = nameid_guidstream[16 *
                                                         (nameid.wGuid - 3):16 * (nameid.wGuid - 2)]
 
-    def get_folder(self, entryid: EntryID, parent_path: str = '') -> Folder:
+    def get_folder(self, entry_id: EntryID, parent_path: str = '') -> Folder:
 
-        return Folder(entryid.nid, self.ltp, parent_path, self)
+        return Folder(entry_id.nid, self.ltp, parent_path, self)
 
     def get_named_properties(self) -> str:
 
@@ -2557,12 +2560,12 @@ class PST:
         return status
 
     @staticmethod
-    def bruteforce(charset, maxlength: int) -> Generator[str, None, None]:
+    def bruteforce(charset:str, maxlength: int) -> Generator[str, None, None]:
 
         return (''.join(candidate) for candidate in itertools.chain.from_iterable(itertools.product(charset, repeat=i) for i in range(1, maxlength + 1)))
 
     @staticmethod
-    def crack_password(crc, dictionary_file: str = '') -> str:
+    def crack_password(crc: int, dictionary_file: str = '') -> str:
         """either does a dictionary attack against the PST password CRC hash, or does a brute force of up to 4 chars"""
 
         if dictionary_file:
